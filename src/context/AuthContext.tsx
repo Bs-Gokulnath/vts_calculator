@@ -14,10 +14,10 @@ interface AuthContextType {
   logout: () => void;
 }
 
-// Allowed emails: any @vtsons.com address OR this specific gmail account
+// Allowed emails: any @vtyarns.com address OR this specific gmail account
 function isAllowed(email: string): boolean {
   const e = email.toLowerCase().trim();
-  return e.endsWith('@vtsons.com') || e === 'bharanidharan168@gmail.com';
+  return e.endsWith('@vtyarns.com') || e === 'bharanidharan168@gmail.com';
 }
 
 function loadSession(): { isLoggedIn: boolean; user: AuthUser | null; token: string | null } {
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isAllowed(profile.email)) {
         return {
           ok: false,
-          error: `Access denied for ${profile.email}. Only @vtsons.com accounts are allowed to sign in.`,
+          error: `Access denied for ${profile.email}. Only @vtyarns.com accounts and authorised users can sign in.`,
         };
       }
 

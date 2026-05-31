@@ -87,7 +87,7 @@ export default function SignInScreen() {
 
         <div className="mt-5 flex items-center justify-center gap-1.5 text-gray-400">
           <ShieldCheck size={13} className="text-emerald-500" />
-          <span className="text-[11px]">Secured by Google · Restricted access only</span>
+          <span className="text-[11px]">Restricted to @vtyarns.com accounts</span>
         </div>
       </div>
 
