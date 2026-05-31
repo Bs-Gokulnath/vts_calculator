@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-surface-page text-ink antialiased;
+    overscroll-behavior: none;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  input, select, textarea { @apply outline-none; }
+  ::-webkit-scrollbar { display: none; }
+  * { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer components {
+
+  /* ── Page Header — respects iPhone notch ── */
+  .page-header {
+    @apply bg-header-gradient-sm px-4 pb-3.5 shrink-0 shadow-header;
+    padding-top: calc(env(safe-area-inset-top) + 1rem);
+  }
+  .page-title {
+    @apply text-white font-bold text-[17px] tracking-tight;
+  }
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-gray-100/80;
+  }
+  .card-brand {
+    background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 80%);
+    @apply rounded-2xl border border-violet-200/60;
+  }
+  .card-success {
+    @apply bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200/60;
+  }
+  .card-elevated {
+    @apply bg-white rounded-2xl shadow-lifted border border-gray-100/60;
+  }
+
+  /* ── Inputs ── */
+  .input-field {
+    @apply w-full h-11 bg-white border border-gray-200 rounded-xl px-3.5 text-sm text-ink
+           placeholder-gray-400 transition-all duration-150
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
+  }
+  .select-field {
+    @apply w-full h-11 bg-white border border-gray-200 rounded-xl px-3.5 pr-9 text-sm text-ink
+           appearance-none cursor-pointer transition-all duration-150
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
+  }
+  .label {
+    @apply block text-[11px] font-semibold text-ink-muted uppercase tracking-wide mb-1.5;
+  }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply h-11 inline-flex items-center justify-center gap-2 px-5
+           bg-brand-gradient text-white text-sm font-semibold rounded-xl
+           shadow-sm hover:shadow-glow active:scale-[0.98]
+           transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-outline {
+    @apply h-11 inline-flex items-center justify-center gap-2 px-5
+           bg-white border border-gray-200 text-ink text-sm font-medium rounded-xl
+           hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98]
+           transition-all duration-150;
+  }
+  .btn-ghost {
+    @apply h-11 inline-flex items-center justify-center gap-2 px-4
+           text-brand-600 text-sm font-medium rounded-xl
+           hover:bg-brand-50 active:scale-[0.98]
+           transition-all duration-150;
+  }
+  .btn-danger {
+    @apply h-11 inline-flex items-center justify-center gap-2 px-5
+           bg-red-500 text-white text-sm font-semibold rounded-xl
+           hover:bg-red-600 active:scale-[0.98]
+           transition-all duration-150;
+  }
+  .btn-icon {
+    @apply w-11 h-11 inline-flex items-center justify-center rounded-xl
+           text-gray-500 hover:bg-gray-100 active:scale-[0.95]
+           transition-all duration-150;
+  }
+
+  /* ── Badges & Chips ── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-brand {
+    @apply badge bg-brand-100 text-brand-700;
+  }
+  .badge-success {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+  .badge-neutral {
+    @apply badge bg-gray-100 text-gray-600;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium
+           bg-white border border-gray-200 text-ink-muted shadow-card;
+  }
+
+  /* ── Section label ── */
+  .section-label {
+    @apply flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest
+           text-brand-600 mb-3;
+  }
+  .section-label::before {
+    content: '';
+    @apply block w-0.5 h-3.5 bg-brand-400 rounded-full;
+  }
+
+  /* ── Price display ── */
+  .price-large {
+    @apply text-4xl font-black text-ink tracking-tight;
+  }
+  .price-medium {
+    @apply text-2xl font-black text-ink tracking-tight;
+  }
+
+  /* ── Table ── */
+  .data-table {
+    @apply w-full text-xs;
+  }
+  .data-table thead tr {
+    @apply bg-brand-50 border-b border-brand-100;
+  }
+  .data-table thead th {
+    @apply px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-brand-700;
+  }
+  .data-table tbody tr:nth-child(even) {
+    @apply bg-gray-50/50;
+  }
+  .data-table tbody td {
+    @apply px-3 py-2.5 text-gray-700;
+  }
+
+  /* ── Dialog / Modal — slides up from bottom on mobile ── */
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-end justify-center
+           bg-black/50 backdrop-blur-sm;
+  }
+  .dialog-panel {
+    @apply bg-white rounded-t-3xl p-6 w-full shadow-float animate-slide-up;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1.5rem);
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+
+  /* ── Nav bar — respects iPhone home bar ── */
+  .nav-bar {
+    @apply shrink-0 bg-white border-t border-gray-100;
+    box-shadow: 0 -1px 0 rgba(0,0,0,0.04), 0 -4px 16px rgba(0,0,0,0.05);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ── Scrollable table wrapper (for data tables on small screens) ── */
+  .table-scroll {
+    @apply overflow-x-auto -mx-4 px-4;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── Animations ── */
+  .animate-in { @apply animate-fade-in; }
+}
