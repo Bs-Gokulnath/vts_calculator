@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Trash2, Share2, Bookmark, ArrowRight } from 'lucide-react';
 import { useApp, QuoteHistory } from '../context/AppContext';
-import { formatDate, shareText } from '../utils/format';
+import { formatDate } from '../utils/format';
+import ShareModal from '../components/ui/ShareModal';
 
 export default function HistoryScreen() {
   const { state, dispatch } = useApp();
@@ -115,17 +116,13 @@ function HistoryCard({
   index: number;
   onDelete: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleShare = async () => {
-    await shareText(item.text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const [shareOpen, setShareOpen] = useState(false);
 
   const formattedDate = formatDate(new Date(item.savedAt));
 
   return (
+    <>
+    <ShareModal text={item.text} open={shareOpen} onClose={() => setShareOpen(false)} />
     <div
       className="card border-l-4 border-brand-400 p-0 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
       style={{ animationDelay: `${index * 40}ms` }}
@@ -159,12 +156,12 @@ function HistoryCard({
         {/* Action row */}
         <div className="flex items-center gap-2 pt-0.5">
           <button
-            onClick={handleShare}
+            onClick={() => setShareOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand-500 text-white hover:bg-brand-600 active:scale-95 text-xs font-semibold transition-all shadow-sm shadow-brand-200"
             title="Share"
           >
             <Share2 size={12} />
-            <span>{copied ? 'Copied!' : 'Share'}</span>
+            <span>Share</span>
           </button>
           <button
             onClick={onDelete}
@@ -177,5 +174,6 @@ function HistoryCard({
         </div>
       </div>
     </div>
+    </>
   );
 }

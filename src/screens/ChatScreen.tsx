@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Share2, Cpu, Bookmark, BookmarkCheck, Zap, MessageCircle, Sparkles } from 'lucide-react';
+import { Send, Share2, Cpu, Bookmark, BookmarkCheck, Zap, MessageCircle, Sparkles, Trash2 } from 'lucide-react';
+import Modal from '../components/ui/Modal';
 import { useApp } from '../context/AppContext';
 import { parseYarnQuery, ParsedQuery } from '../utils/yarnParser';
-import { formatRupees, shareText } from '../utils/format';
+import { formatRupees } from '../utils/format';
+import ShareModal from '../components/ui/ShareModal';
 import { RawMaterial, exMillIncTransport, cleanFibrePrice } from '../data/rawMaterials';
 import {
   YARN_COUNT_GROUPS, DOUBLING_RATES,
@@ -11,31 +13,54 @@ import {
 } from '../data/yarnCount';
 
 type Awaiting = 'none' | 'materialChoice' | 'subType' | 'contribution';
+type ConversationMsg = { role: 'user' | 'assistant'; content: string };
 
 interface Msg { text: string; isUser: boolean; }
 
 export default function ChatScreen() {
   const { state, dispatch } = useApp();
-  const [msgs, setMsgs]             = useState<Msg[]>([{
+  const CHAT_STORAGE_KEY = 'vtsChatMessages';
+  const WELCOME_MSG: Msg = {
     text: 'Hi! Ask me for yarn prices.\n\nExamples:\n• 30 viscose compact\n• 30/1 HT price\n• 30s slub price\n• 40 MM knitting\n• 30/2 weaving',
     isUser: false,
-  }]);
+  };
+
+  const [msgs, setMsgsRaw] = useState<Msg[]>(() => {
+    try {
+      const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (stored) return JSON.parse(stored) as Msg[];
+    } catch {}
+    return [WELCOME_MSG];
+  });
+
+  const setMsgs = (updater: Msg[] | ((prev: Msg[]) => Msg[])) => {
+    setMsgsRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const [input, setInput]           = useState('');
   const [isTyping, setIsTyping]     = useState(false);
   const [awaiting, setAwaiting]     = useState<Awaiting>('none');
-  const [sessionContrib, setSessContrib] = useState<number | null>(null);
+  const [sessionContrib, setSessContrib] = useState<number | null>(60000);
 
   // Resolution state
-  const pendingQuery  = useRef<ParsedQuery | null>(null);
-  const pendingMat    = useRef<RawMaterial | null>(null);
-  const pendingChoices = useRef<RawMaterial[]>([]);
+  const pendingQuery    = useRef<ParsedQuery | null>(null);
+  const pendingMat      = useRef<RawMaterial | null>(null);
+  const pendingChoices  = useRef<RawMaterial[]>([]);
   const pendingSubTypes = useRef<string[]>([]);
 
-  const resolvedMat    = useRef<RawMaterial | null>(null);
-  const resolvedSubType = useRef<string | null>(null);
-  const resolvedCount  = useRef<{ count: string; gps: number | null } | null>(null);
+  const resolvedMat      = useRef<RawMaterial | null>(null);
+  const resolvedSubType  = useRef<string | null>(null);
+  const resolvedCount    = useRef<{ count: string; gps: number | null } | null>(null);
   const resolvedDoubling = useRef<{ count: string; rate: number } | null>(null);
-  const resolvedEndUse = useRef<string | null>(null);
+  const resolvedEndUse   = useRef<string | null>(null);
+
+  // Context memory — enables follow-up queries like "what about 40s?" or "same for Eco Vero"
+  const conversationHistory = useRef<ConversationMsg[]>([]);
+  const lastContext = useRef<{ yarnType?: string; subType?: string }>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, isTyping]);
@@ -57,6 +82,16 @@ export default function ChatScreen() {
     }
   }
 
+  // Merges a freshly parsed query with the last resolved context so follow-up
+  // queries like "40s" or "same for 40" reuse the previous yarn type / subtype.
+  function mergeWithContext(q: ParsedQuery): ParsedQuery {
+    const ctx = lastContext.current;
+    if (!q.yarnType && ctx.yarnType) {
+      return { ...q, yarnType: ctx.yarnType, subType: q.subType ?? ctx.subType ?? null };
+    }
+    return q;
+  }
+
   async function handleQuery(input: string) {
     pendingQuery.current = null;
     resolvedMat.current = resolvedSubType.current = resolvedCount.current = resolvedDoubling.current = resolvedEndUse.current = null;
@@ -65,11 +100,21 @@ export default function ChatScreen() {
 
     let q: ParsedQuery;
     if (state.apiKey) {
-      try { q = await claudeParse(input, state.apiKey); }
-      catch { q = parseYarnQuery(input); }
+      try {
+        const { query, rawJson } = await claudeParse(input, state.apiKey, conversationHistory.current);
+        // Keep last 8 messages (4 turns) to stay within token budget
+        conversationHistory.current = [
+          ...conversationHistory.current,
+          { role: 'user' as const,      content: input  },
+          { role: 'assistant' as const, content: rawJson },
+        ].slice(-8);
+        q = query;
+      } catch {
+        q = mergeWithContext(parseYarnQuery(input));
+      }
     } else {
-      await new Promise(r => setTimeout(r, 300)); // tiny delay for UX
-      q = parseYarnQuery(input);
+      await new Promise(r => setTimeout(r, 300));
+      q = mergeWithContext(parseYarnQuery(input));
     }
     setIsTyping(false);
     routeQuery(q);
@@ -137,20 +182,28 @@ export default function ChatScreen() {
     resolvedCount.current    = countEntry;
     resolvedDoubling.current = doublingRate;
     resolvedEndUse.current   = q.endUse;
+
+    // Persist context so the next query can reference "same yarn" without re-specifying
+    lastContext.current = {
+      yarnType: m.name,
+      subType:  st && st !== 'Normal' ? st : undefined,
+    };
+
     setAwaiting('none');
     showResult();
   }
 
   function showResult() {
-    const m            = resolvedMat.current!;
-    const cleanFibre   = exMillIncTransport(m) * (1 + m.wastePercent / 100);
-    const sub          = resolvedSubType.current;
-    const ce           = resolvedCount.current;
-    const dr           = resolvedDoubling.current;
-    const eu           = resolvedEndUse.current;
+    const m          = resolvedMat.current!;
+    const cleanFibre = exMillIncTransport(m) * (1 + m.wastePercent / 100);
+    const sub        = resolvedSubType.current;
+    const ce         = resolvedCount.current;
+    const dr         = resolvedDoubling.current;
+    const eu         = resolvedEndUse.current;
+    const prod       = ce ? productionRounded(ce) : null;
 
     const header = [m.name, sub && sub !== 'Normal' ? sub : null, `(${m.supplier})`].filter(Boolean).join(' • ');
-    const lines: string[] = [
+    const lines: (string | null)[] = [
       header,
       eu ? `End use: ${eu.charAt(0).toUpperCase() + eu.slice(1)}` : null,
       '──────────────────────────',
@@ -161,39 +214,33 @@ export default function ChatScreen() {
       dr ? `Count:         ${dr.count}` : null,
       dr ? `Doubling Rate: ₹${dr.rate.toFixed(0)}` : null,
       dr ? '' : null,
-      `Ex-Mill Rate:    ₹${m.exMillRate.toFixed(2)}`,
+      `Yarn Rate:       ₹${m.exMillRate.toFixed(2)}`,
       `Inc. Transport:  ₹${exMillIncTransport(m).toFixed(2)}`,
       `Waste:           ${m.wastePercent.toFixed(1)}%`,
       '──────────────────────────',
       `Clean Fibre Price: ₹${cleanFibre.toFixed(2)}`,
-    ].filter(l => l != null) as string[];
+    ];
 
-    bot(lines.join('\n'));
-
-    const prod = ce ? productionRounded(ce) : null;
-    if (prod && prod > 0) {
-      if (sessionContrib != null) {
-        showExMillRate(cleanFibre, prod);
-      } else {
-        setAwaiting('contribution');
-        const hint = state.contributions.length > 0
-          ? ` (${state.contributions.slice(0,4).map(v => `₹${v.toFixed(0)}`).join(', ')}…)`
-          : '';
-        bot(`Enter contribution amount${hint} to get the Ex-Mill Rate:`);
-      }
+    if (prod && prod > 0 && sessionContrib != null) {
+      const rate   = sessionContrib / prod;
+      const exMill = rate + cleanFibre;
+      lines.push(
+        '',
+        `Rate / kg:    ₹${rate.toFixed(2)}`,
+        '──────────────────────────',
+        `Yarn Rate: ₹${exMill.toFixed(2)}`,
+      );
+      bot((lines.filter(l => l != null) as string[]).join('\n'));
+    } else if (prod && prod > 0) {
+      bot((lines.filter(l => l != null) as string[]).join('\n'));
+      setAwaiting('contribution');
+      const hint = state.contributions.length > 0
+        ? ` (${state.contributions.slice(0,4).map(v => `₹${v.toFixed(0)}`).join(', ')}…)`
+        : '';
+      bot(`Enter contribution amount${hint} to get the Yarn Rate:`);
+    } else {
+      bot((lines.filter(l => l != null) as string[]).join('\n'));
     }
-  }
-
-  function showExMillRate(cleanFibre: number, production: number) {
-    const contrib  = sessionContrib!;
-    const rate     = contrib / production;
-    const exMill   = rate + cleanFibre;
-    bot([
-      `Contribution: ${formatRupees(contrib)}`,
-      `Rate / kg:    ₹${rate.toFixed(2)}`,
-      '──────────────────────────',
-      `Ex-Mill Rate: ₹${exMill.toFixed(2)}`,
-    ].join('\n'));
   }
 
   function handleMaterialChoice(text: string) {
@@ -236,10 +283,9 @@ export default function ChatScreen() {
       const rate = val / prod;
       const exMill = rate + cleanFibre;
       bot([
-        `Contribution: ${formatRupees(val)}`,
         `Rate / kg:    ₹${rate.toFixed(2)}`,
         '──────────────────────────',
-        `Ex-Mill Rate: ₹${exMill.toFixed(2)}`,
+        `Yarn Rate: ₹${exMill.toFixed(2)}`,
       ].join('\n'));
     }
   }
@@ -258,6 +304,20 @@ export default function ChatScreen() {
   function allTypes() { return [...new Set(state.rawMaterials.map(m => m.name))].join(', '); }
   function numbered(items: string[]) { return items.map((s, i) => `${i+1}. ${s}`).join('\n'); }
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  function handleClearChat() {
+    setMsgs([WELCOME_MSG]);
+    setAwaiting('none');
+    setInput('');
+    setShowClearConfirm(false);
+    conversationHistory.current = [];
+    lastContext.current = {};
+    pendingQuery.current = pendingMat.current = null;
+    pendingChoices.current = pendingSubTypes.current = [];
+    resolvedMat.current = resolvedSubType.current = resolvedCount.current = resolvedDoubling.current = resolvedEndUse.current = null;
+  }
+
   const hintText = () => {
     if (isTyping) return 'Thinking…';
     if (awaiting === 'contribution')   return 'Enter contribution amount…';
@@ -267,16 +327,35 @@ export default function ChatScreen() {
 
   return (
     <div className="flex flex-col h-full bg-surface-page">
+      {/* Confirm clear modal */}
+      <Modal open={showClearConfirm} onClose={() => setShowClearConfirm(false)} title="Clear Chat">
+        <p className="text-sm text-gray-600 mb-5">All messages will be removed. This can't be undone.</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowClearConfirm(false)}
+            className="btn-outline flex-1"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleClearChat}
+            className="btn-danger flex-1"
+          >
+            Clear
+          </button>
+        </div>
+      </Modal>
+
       {/* Header */}
       <div className="page-header shrink-0">
         <div className="flex items-center justify-center gap-2">
           <Sparkles size={16} className="text-brand-500 shrink-0" />
-          <h1 className="page-title text-center">Chat</h1>
+          <h1 className="page-title">Chat</h1>
         </div>
       </div>
 
-      {/* AI status bar */}
-      <div className="flex justify-center mx-4 my-2 shrink-0">
+      {/* AI status bar + Clear button */}
+      <div className="flex items-center justify-center mx-4 my-2 shrink-0 gap-2">
         <span
           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
             state.apiKey
@@ -289,6 +368,14 @@ export default function ChatScreen() {
             : <Cpu size={10} className="shrink-0" />}
           {state.apiKey ? 'On-device AI parsing active' : 'Keyword parser active'}
         </span>
+        <button
+          onClick={() => setShowClearConfirm(true)}
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100 bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-500 active:scale-95 transition-all"
+          title="Clear Chat"
+        >
+          <Trash2 size={10} />
+          Clear
+        </button>
       </div>
 
       {/* Session contribution banner */}
@@ -344,8 +431,8 @@ export default function ChatScreen() {
 }
 
 function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispatch: React.Dispatch<any> }) {
-  const [copied, setCopied] = useState(false);
-  const [saved,  setSaved]  = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [shareOpen,   setShareOpen]   = useState(false);
   const isResult = msg.text.includes('──');
 
   if (msg.isUser) {
@@ -393,39 +480,38 @@ function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispa
   /* Result bubble — monospace code-block style */
   if (isResult) {
     return (
-      <div className="flex justify-start mb-2">
-        <div className="max-w-[82%]">
-          <div className="bg-white shadow-card border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-ink">
-            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 mt-1">
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-gray-600">{msg.text}</pre>
+      <>
+        <ShareModal text={msg.text} open={shareOpen} onClose={() => setShareOpen(false)} />
+        <div className="flex justify-start mb-2">
+          <div className="max-w-[82%]">
+            <div className="bg-white shadow-card border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-ink">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 mt-1">
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-gray-600">{msg.text}</pre>
+              </div>
+            </div>
+            <div className="chip flex items-center gap-1 mt-1.5 ml-1">
+              <button
+                onClick={handleSave}
+                className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                  saved
+                    ? 'bg-brand-50 border-brand-100 text-brand-600'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500'
+                }`}
+              >
+                {saved ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
+                {saved ? 'Saved!' : 'Save'}
+              </button>
+              <button
+                onClick={() => setShareOpen(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500"
+              >
+                <Share2 size={11} />
+                Share
+              </button>
             </div>
           </div>
-          <div className="chip flex items-center gap-1 mt-1.5 ml-1">
-            <button
-              onClick={handleSave}
-              className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                saved
-                  ? 'bg-brand-50 border-brand-100 text-brand-600'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500'
-              }`}
-            >
-              {saved ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
-              {saved ? 'Saved!' : 'Save'}
-            </button>
-            <button
-              onClick={async () => { await shareText(msg.text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-              className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                copied
-                  ? 'bg-brand-50 border-brand-100 text-brand-600'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500'
-              }`}
-            >
-              <Share2 size={11} />
-              {copied ? 'Copied!' : 'Share'}
-            </button>
-          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -459,31 +545,50 @@ function TypingBubble() {
   );
 }
 
-async function claudeParse(input: string, apiKey: string): Promise<ParsedQuery> {
-  const system = `You are a yarn query parser. Extract structured data and return ONLY valid JSON.
-Available yarn_type values: Viscose, Modal, Micro Modal, Excel, Liva Eco, Micro Liva Eco, Anti-Bacterial, Liva Reviva, Eco Vero, Refibra, Tencel STD, Micro EcoVero, Micro Tencel
-Available sub_type values: Normal, High Twist, Slub, High Twist Slub, Micro Viscose, Micro Excel, Doubling
-Aliases: vsf→Viscose, mm→Micro Modal, mev→Micro EcoVero, ht→High Twist, ring/compact/cpt→Normal, hosiery/knitting→knitting, weaving/woven→weaving
+async function claudeParse(
+  input: string,
+  apiKey: string,
+  history: ConversationMsg[],
+): Promise<{ query: ParsedQuery; rawJson: string }> {
+  const system = `You are a yarn query parser with conversation memory. Extract structured data from the user's latest message and return ONLY valid JSON.
+
+Use conversation history to infer missing context:
+- If the user says "same", "it", "that" or omits a previously mentioned yarn type/sub-type, carry it forward from history.
+- If only a count is mentioned (e.g. "40s"), keep the previous yarn_type and sub_type.
+- If a new yarn type is explicitly mentioned, reset sub_type unless the user specifies one.
+
+Available yarn_type: Viscose, Modal, Micro Modal, Excel, Liva Eco, Micro Liva Eco, Anti-Bacterial, Liva Reviva, Eco Vero, Refibra, Tencel STD, Micro EcoVero, Micro Tencel
+Available sub_type: Normal, High Twist, Slub, High Twist Slub, Micro Viscose, Micro Excel, Doubling
+Aliases: vsf→Viscose, mm→Micro Modal, mev→Micro EcoVero, ht→High Twist, ring/compact/cpt→Normal, knitting/hosiery→knitting end_use, weaving/woven→weaving end_use
+
 Return exactly: {"count":null,"yarn_type":null,"sub_type":null,"end_use":null,"is_doubled":false}`;
+
+  const messages: ConversationMsg[] = [
+    ...history.slice(-8), // last 4 turns for context
+    { role: 'user', content: input },
+  ];
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 150, system, messages: [{ role: 'user', content: input }] }),
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 150, system, messages }),
   });
 
   if (!resp.ok) throw new Error(`API error ${resp.status}`);
-  const body = await resp.json() as { content: Array<{ text: string }> };
-  const text = body.content[0].text.replace(/```json?\s*|```/g, '').trim();
-  const json = JSON.parse(text) as { count: string | null; yarn_type: string | null; sub_type: string | null; end_use: string | null; is_doubled: boolean };
+  const body    = await resp.json() as { content: Array<{ text: string }> };
+  const rawJson = body.content[0].text.replace(/```json?\s*|```/g, '').trim();
+  const json    = JSON.parse(rawJson) as { count: string | null; yarn_type: string | null; sub_type: string | null; end_use: string | null; is_doubled: boolean };
 
   const isDoubled = json.is_doubled ?? false;
   return {
-    countStr:  json.count,
-    isDoubled,
-    yarnType:  json.yarn_type,
-    subType:   isDoubled ? 'Doubling' : json.sub_type,
-    endUse:    json.end_use,
-    original:  input,
+    query: {
+      countStr: json.count,
+      isDoubled,
+      yarnType: json.yarn_type,
+      subType:  isDoubled ? 'Doubling' : json.sub_type,
+      endUse:   json.end_use,
+      original: input,
+    },
+    rawJson,
   };
 }
