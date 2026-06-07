@@ -202,7 +202,6 @@ export default function ChatScreen() {
       ce ? `Count:      ${ce.count}` : null,
       ce?.gps != null ? `GPS:        ${ce.gps.toFixed(0)}` : null,
       ce ? `Production: ${productionRounded(ce) ?? '—'} kg/day` : null,
-      ce ? '' : null,
       dr ? `Count:         ${dr.count}` : null,
       dr ? `Doubling Rate: ₹${dr.rate.toFixed(0)}` : null,
       dr ? '' : null,
@@ -219,7 +218,7 @@ export default function ChatScreen() {
         '',
         `Rate / kg:    ₹${rate.toFixed(2)}`,
         '──────────────────────────',
-        `Yarn Rate: ₹${exMill.toFixed(2)}`,
+        `Ex Mill Rate: ₹${exMill.toFixed(2)}`,
       );
       bot((lines.filter(l => l != null) as string[]).join('\n'));
     } else if (prod && prod > 0) {
@@ -276,7 +275,7 @@ export default function ChatScreen() {
       bot([
         `Rate / kg:    ₹${rate.toFixed(2)}`,
         '──────────────────────────',
-        `Yarn Rate: ₹${exMill.toFixed(2)}`,
+        `Ex Mill Rate: ₹${exMill.toFixed(2)}`,
       ].join('\n'));
     }
   }
