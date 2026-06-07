@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Share2, CheckCircle, Calculator, Bookmark, BookmarkCheck, ChevronDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { RawMaterial, exMillIncTransport, cleanFibrePrice } from '../data/rawMaterials';
@@ -66,10 +66,6 @@ export default function CalculatorScreen() {
       setTransport(m.transport.toFixed(2));
       setWaste(m.wastePercent.toFixed(1));
     }
-  }
-
-  function onExMillChange(v: string) {
-    setExMill(v);
   }
 
   function onGpsChange(v: string) {
@@ -152,39 +148,53 @@ export default function CalculatorScreen() {
   const others  = materials.filter(m => m.supplier !== 'Grasim' && m.supplier !== 'Lenzing');
 
   return (
-    <div className="flex flex-col h-full bg-surface-page">
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
       {/* Header */}
       <header className="page-header">
         <div className="flex items-center justify-center gap-2">
-          <Calculator size={17} className="text-white/80" />
+          <Calculator size={17} style={{ color: 'rgba(255,255,255,0.7)' }} />
           <h1 className="page-title text-center">Yarn Cost Calculator</h1>
         </div>
-        <p className="text-center text-xs text-white/60 mt-0.5">Calculate ex-mill rates instantly</p>
+        <p className="text-center text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          Calculate ex-mill rates instantly
+        </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-5 space-y-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)' }}>
+      <div
+        className="flex-1 overflow-y-auto px-4 pt-5 space-y-5"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)' }}
+      >
 
         {/* 1. Yarn Type */}
         <div>
           <p className="section-label">Yarn Type</p>
-          <SelectWrapper
-            value={material?.id ?? ''}
-            onChange={e => onMaterialChange(e.target.value)}
-          >
+          <SelectWrapper value={material?.id ?? ''} onChange={e => onMaterialChange(e.target.value)}>
             <option value="">Choose a yarn type…</option>
             {grasim.length > 0  && <optgroup label="Grasim">{grasim.map( m => <option key={m.id} value={m.id}>{m.name}</option>)}</optgroup>}
             {lenzing.length > 0 && <optgroup label="Lenzing">{lenzing.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</optgroup>}
-            {others.length > 0  && <optgroup label="Other">{others.map(  m => <option key={m.id} value={m.id}>{m.name}  — {m.supplier}</option>)}</optgroup>}
+            {others.length > 0  && <optgroup label="Other">{others.map(  m => <option key={m.id} value={m.id}>{m.name} — {m.supplier}</option>)}</optgroup>}
           </SelectWrapper>
         </div>
 
-        {/* Empty state when no material selected */}
+        {/* Empty state */}
         {!material && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-5xl mb-3">🧶</div>
-            <p className="text-sm font-semibold text-ink-muted">Select a yarn type above</p>
-            <p className="text-xs text-gray-400 mt-1">to begin calculating costs</p>
+            <div
+              className="w-20 h-20 mb-4 flex items-center justify-center rounded-full"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+            >
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ color: 'var(--text-muted)' }}>
+                <circle cx="20" cy="20" r="14" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M8 15 Q20 9 32 15" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <path d="M6 20 Q20 13 34 20" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <path d="M8 25 Q20 19 32 25" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <line x1="26" y1="5" x2="22" y2="35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <line x1="30" y1="6" x2="26" y2="36" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Select a yarn type above</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>to begin calculating costs</p>
           </div>
         )}
 
@@ -193,7 +203,7 @@ export default function CalculatorScreen() {
           <div className="card p-4 space-y-3">
             <p className="section-label">Rate Details</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Ex-Mill Rate (₹)" value={exMill} onChange={onExMillChange} />
+              <Field label="Ex-Mill Rate (₹)" value={exMill} onChange={setExMill} />
               <Field label="Waste %" value={waste} onChange={setWaste} suffix="%" />
             </div>
             <Field
@@ -206,54 +216,51 @@ export default function CalculatorScreen() {
 
         {/* 3. Clean Fibre Result */}
         {material && cleanFibre != null && (
-          <div className="card-brand p-4 shadow-card animate-in">
-            {/* Material name + supplier pill */}
+          <div className="card p-4 animate-in" style={{ borderLeft: '3px solid var(--accent)' }}>
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <span className="badge-brand flex-1 min-w-0 truncate">
+              <span
+                className="flex-1 min-w-0 truncate text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={{ background: 'var(--accent-soft)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
+              >
                 {material.name} · {material.supplier}
               </span>
               <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleSave(false)}
-                  className="btn-icon"
-                  title={savedClean ? 'Saved!' : 'Save'}
-                  aria-label={savedClean ? 'Saved!' : 'Save'}
-                >
-                  {savedClean ? <BookmarkCheck size={15} className="text-brand-600" /> : <Bookmark size={15} />}
+                <button onClick={() => handleSave(false)} className="btn-icon" title={savedClean ? 'Saved!' : 'Save'}>
+                  {savedClean
+                    ? <BookmarkCheck size={15} style={{ color: 'var(--text)' }} />
+                    : <Bookmark size={15} style={{ color: 'var(--text-muted)' }} />}
                 </button>
-                <button
-                  onClick={() => handleShare(false)}
-                  className="btn-icon"
-                  title="Share"
-                  aria-label="Share"
-                >
-                  <Share2 size={15} />
+                <button onClick={() => handleShare(false)} className="btn-icon" title="Share">
+                  <Share2 size={15} style={{ color: 'var(--text-muted)' }} />
                 </button>
               </div>
             </div>
 
-            {/* Sub-type badge */}
             {subType && subType !== 'Normal' && (
-              <span className="badge badge-neutral mb-3">{subType}</span>
+              <span
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold mb-3"
+                style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+              >
+                {subType}
+              </span>
             )}
 
             <p className="section-label">Result</p>
-
-            <div className="border-t border-violet-200/60 pt-3 mt-1">
-              <p className="text-xs text-ink-muted mb-1">Clean Fibre Price</p>
-              <p className="price-large text-violet-900">₹{cleanFibre.toFixed(2)}</p>
-              <p className="text-xs text-violet-400/70 mt-0.5">Inc. Transport × (1 + Waste %)</p>
+            <div className="pt-3 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
+              <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Clean Fibre Price</p>
+              <p className="price-large">₹{cleanFibre.toFixed(2)}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Inc. Transport × (1 + Waste %)</p>
             </div>
 
             {copied && (
-              <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1">
+              <p className="text-xs font-semibold mt-2 flex items-center gap-1 text-emerald-600">
                 <CheckCircle size={12} /> Copied to clipboard!
               </p>
             )}
           </div>
         )}
 
-        {/* 4. Sub-type (grouped materials) */}
+        {/* 4. Sub-type */}
         {material && group && (
           <div>
             <p className="section-label">Sub Type</p>
@@ -271,10 +278,7 @@ export default function CalculatorScreen() {
         {showCount && (
           <div>
             <p className="section-label">Count</p>
-            <SelectWrapper
-              value={countStr}
-              onChange={e => onCountChange(e.target.value)}
-            >
+            <SelectWrapper value={countStr} onChange={e => onCountChange(e.target.value)}>
               <option value="">Choose a count…</option>
               {countEntries.map(e => <option key={e.count} value={e.count}>{e.count}</option>)}
             </SelectWrapper>
@@ -312,51 +316,45 @@ export default function CalculatorScreen() {
           </div>
         )}
 
-        {/* 8. Yarn Cost Summary Result */}
+        {/* 8. Yarn Cost Summary */}
         {(ratePerKg != null || yarnExMill != null) && (
-          <div className="card-success p-4 shadow-card animate-in">
+          <div className="card p-4 animate-in" style={{ borderLeft: '3px solid var(--accent)' }}>
             <div className="flex items-center gap-2 mb-3">
               <div className="flex items-center gap-2 flex-1">
-                <Calculator size={15} className="text-emerald-600 shrink-0" />
-                <span className="font-semibold text-emerald-900 text-sm">Yarn Cost Summary</span>
+                <Calculator size={15} style={{ color: 'var(--text-muted)' }} />
+                <span className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Yarn Cost Summary</span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleSave(true)}
-                  className="btn-icon"
-                  title={savedFull ? 'Saved!' : 'Save'}
-                  aria-label={savedFull ? 'Saved!' : 'Save'}
-                >
-                  {savedFull ? <BookmarkCheck size={15} className="text-emerald-600" /> : <Bookmark size={15} />}
+                <button onClick={() => handleSave(true)} className="btn-icon" title={savedFull ? 'Saved!' : 'Save'}>
+                  {savedFull
+                    ? <BookmarkCheck size={15} style={{ color: 'var(--text)' }} />
+                    : <Bookmark size={15} style={{ color: 'var(--text-muted)' }} />}
                 </button>
-                <button
-                  onClick={() => handleShare(true)}
-                  className="btn-icon"
-                  title="Share"
-                  aria-label="Share"
-                >
-                  <Share2 size={15} />
+                <button onClick={() => handleShare(true)} className="btn-icon" title="Share">
+                  <Share2 size={15} style={{ color: 'var(--text-muted)' }} />
                 </button>
               </div>
             </div>
 
             <p className="section-label">Cost Summary</p>
 
-            <div className="border-t border-emerald-200/60 pt-3 space-y-4">
+            <div className="pt-3 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
               {ratePerKg != null && (
                 <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-sm font-medium text-emerald-800">Rate / kg</p>
-                    <p className="text-xs text-emerald-500/70">Contribution ÷ Production</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Rate / kg</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Contribution ÷ Production</p>
                   </div>
-                  <p className="text-2xl font-black text-emerald-800 tracking-tight">₹{ratePerKg.toFixed(2)}</p>
+                  <p className="text-2xl font-black tracking-tight" style={{ color: 'var(--text)' }}>
+                    ₹{ratePerKg.toFixed(2)}
+                  </p>
                 </div>
               )}
               {yarnExMill != null && (
-                <div className="bg-emerald-100/60 rounded-xl px-3 py-3">
-                  <p className="text-xs text-emerald-600 mb-1">Ex-Mill Rate</p>
-                  <p className="price-large text-emerald-900">₹{yarnExMill.toFixed(2)}</p>
-                  <p className="text-xs text-emerald-500/70 mt-0.5">Rate/kg + Clean Fibre</p>
+                <div className="rounded-xl px-3 py-3" style={{ background: 'var(--bg-raised)' }}>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Yarn Rate</p>
+                  <p className="price-large">₹{yarnExMill.toFixed(2)}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>Rate/kg + Clean Fibre</p>
                 </div>
               )}
             </div>
@@ -368,10 +366,7 @@ export default function CalculatorScreen() {
   );
 }
 
-/* Select wrapper with ChevronDown overlay */
-function SelectWrapper({
-  value, onChange, children,
-}: {
+function SelectWrapper({ value, onChange, children }: {
   value: string;
   onChange: React.ChangeEventHandler<HTMLSelectElement>;
   children: React.ReactNode;
@@ -381,7 +376,7 @@ function SelectWrapper({
       <select className="select-field" value={value} onChange={onChange}>
         {children}
       </select>
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
         <ChevronDown size={14} />
       </span>
     </div>
@@ -397,13 +392,18 @@ function Field({ label, value, onChange, readOnly, suffix }: {
       <div className="relative">
         <input
           type="number"
-          className={`input-field ${suffix ? 'pr-7' : ''} ${readOnly ? 'bg-gray-50 text-gray-400 cursor-default' : ''}`}
+          className={`input-field ${suffix ? 'pr-7' : ''}`}
+          style={readOnly ? { background: 'var(--bg-raised)', color: 'var(--text-muted)', cursor: 'default' } : {}}
           value={value}
           onChange={e => onChange?.(e.target.value)}
           readOnly={readOnly}
           inputMode="decimal"
         />
-        {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">{suffix}</span>}
+        {suffix && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+            {suffix}
+          </span>
+        )}
       </div>
     </div>
   );

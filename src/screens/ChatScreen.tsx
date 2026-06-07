@@ -14,7 +14,6 @@ import {
 
 type Awaiting = 'none' | 'materialChoice' | 'subType' | 'contribution';
 type ConversationMsg = { role: 'user' | 'assistant'; content: string };
-
 interface Msg { text: string; isUser: boolean; }
 
 export default function ChatScreen() {
@@ -46,7 +45,6 @@ export default function ChatScreen() {
   const [awaiting, setAwaiting]     = useState<Awaiting>('none');
   const [sessionContrib, setSessContrib] = useState<number | null>(60000);
 
-  // Resolution state
   const pendingQuery    = useRef<ParsedQuery | null>(null);
   const pendingMat      = useRef<RawMaterial | null>(null);
   const pendingChoices  = useRef<RawMaterial[]>([]);
@@ -58,7 +56,6 @@ export default function ChatScreen() {
   const resolvedDoubling = useRef<{ count: string; rate: number } | null>(null);
   const resolvedEndUse   = useRef<string | null>(null);
 
-  // Context memory — enables follow-up queries like "what about 40s?" or "same for Eco Vero"
   const conversationHistory = useRef<ConversationMsg[]>([]);
   const lastContext = useRef<{ yarnType?: string; subType?: string }>({});
 
@@ -73,7 +70,6 @@ export default function ChatScreen() {
     if (!text || isTyping) return;
     setInput('');
     user(text);
-
     switch (awaiting) {
       case 'none':           await handleQuery(text); break;
       case 'materialChoice': handleMaterialChoice(text); break;
@@ -82,8 +78,6 @@ export default function ChatScreen() {
     }
   }
 
-  // Merges a freshly parsed query with the last resolved context so follow-up
-  // queries like "40s" or "same for 40" reuse the previous yarn type / subtype.
   function mergeWithContext(q: ParsedQuery): ParsedQuery {
     const ctx = lastContext.current;
     if (!q.yarnType && ctx.yarnType) {
@@ -95,14 +89,11 @@ export default function ChatScreen() {
   async function handleQuery(input: string) {
     pendingQuery.current = null;
     resolvedMat.current = resolvedSubType.current = resolvedCount.current = resolvedDoubling.current = resolvedEndUse.current = null;
-
     setIsTyping(true);
-
     let q: ParsedQuery;
     if (state.apiKey) {
       try {
         const { query, rawJson } = await claudeParse(input, state.apiKey, conversationHistory.current);
-        // Keep last 8 messages (4 turns) to stay within token budget
         conversationHistory.current = [
           ...conversationHistory.current,
           { role: 'user' as const,      content: input  },
@@ -122,7 +113,6 @@ export default function ChatScreen() {
 
   function routeQuery(q: ParsedQuery) {
     pendingQuery.current = q;
-
     if (!q.yarnType && q.subType) {
       const candidates = materialsBySubType(q.subType);
       if (candidates.length === 0) { bot(`No yarn type found with sub-type "${q.subType}".\nAvailable: ${allTypes()}`); return; }
@@ -132,9 +122,7 @@ export default function ChatScreen() {
       bot(`"${q.subType}" is available for:\n${numbered(candidates.map(m => `${m.name} — ${m.supplier}`))}\nWhich one?`);
       return;
     }
-
     if (!q.yarnType) { bot('Please mention the yarn type (e.g. Viscose, Micro Modal, Excel, Eco Vero, Tencel STD).'); return; }
-
     const matches = state.rawMaterials.filter(m => m.name.toLowerCase() === q.yarnType!.toLowerCase());
     if (matches.length === 0) { bot(`"${q.yarnType}" not found in Settings.\nAvailable: ${allTypes()}`); return; }
     if (matches.length > 1) {
@@ -154,10 +142,15 @@ export default function ChatScreen() {
     let st    = q.subType;
 
     if (grp && !st) {
-      pendingSubTypes.current = grp.subCategories.map(c => c.name);
-      setAwaiting('subType');
-      bot(`${m.name} has sub-types:\n${numbered(pendingSubTypes.current)}\nWhich one?`);
-      return;
+      const hasNormal = grp.subCategories.some(c => c.name === 'Normal');
+      if (hasNormal) {
+        st = 'Normal';
+      } else {
+        pendingSubTypes.current = grp.subCategories.map(c => c.name);
+        setAwaiting('subType');
+        bot(`${m.name} has sub-types:\n${numbered(pendingSubTypes.current)}\nWhich one?`);
+        return;
+      }
     }
 
     if (grp && st) {
@@ -183,7 +176,6 @@ export default function ChatScreen() {
     resolvedDoubling.current = doublingRate;
     resolvedEndUse.current   = q.endUse;
 
-    // Persist context so the next query can reference "same yarn" without re-specifying
     lastContext.current = {
       yarnType: m.name,
       subType:  st && st !== 'Normal' ? st : undefined,
@@ -215,7 +207,6 @@ export default function ChatScreen() {
       dr ? `Doubling Rate: ₹${dr.rate.toFixed(0)}` : null,
       dr ? '' : null,
       `Yarn Rate:       ₹${m.exMillRate.toFixed(2)}`,
-      `Inc. Transport:  ₹${exMillIncTransport(m).toFixed(2)}`,
       `Waste:           ${m.wastePercent.toFixed(1)}%`,
       '──────────────────────────',
       `Clean Fibre Price: ₹${cleanFibre.toFixed(2)}`,
@@ -326,42 +317,34 @@ export default function ChatScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface-page">
-      {/* Confirm clear modal */}
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
       <Modal open={showClearConfirm} onClose={() => setShowClearConfirm(false)} title="Clear Chat">
-        <p className="text-sm text-gray-600 mb-5">All messages will be removed. This can't be undone.</p>
+        <p className="text-sm mb-5" style={{ color: 'var(--text-2)' }}>
+          All messages will be removed. This can't be undone.
+        </p>
         <div className="flex gap-3">
-          <button
-            onClick={() => setShowClearConfirm(false)}
-            className="btn-outline flex-1"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleClearChat}
-            className="btn-danger flex-1"
-          >
-            Clear
-          </button>
+          <button onClick={() => setShowClearConfirm(false)} className="btn-outline flex-1">Cancel</button>
+          <button onClick={handleClearChat} className="btn-danger flex-1">Clear</button>
         </div>
       </Modal>
 
       {/* Header */}
       <div className="page-header shrink-0">
         <div className="flex items-center justify-center gap-2">
-          <Sparkles size={16} className="text-brand-500 shrink-0" />
+          <Sparkles size={16} style={{ color: 'rgba(255,255,255,0.7)' }} />
           <h1 className="page-title">Chat</h1>
         </div>
       </div>
 
-      {/* AI status bar + Clear button */}
+      {/* AI status + Clear button */}
       <div className="flex items-center justify-center mx-4 my-2 shrink-0 gap-2">
         <span
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
-            state.apiKey
-              ? 'bg-brand-50 border-brand-100 text-brand-600'
-              : 'bg-gray-50 border-gray-200 text-gray-500'
-          }`}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+          style={{
+            background: 'var(--accent-soft)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-2)',
+          }}
         >
           {state.apiKey
             ? <Zap size={10} className="shrink-0" />
@@ -370,7 +353,8 @@ export default function ChatScreen() {
         </span>
         <button
           onClick={() => setShowClearConfirm(true)}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100 bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-500 active:scale-95 transition-all"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all active:scale-95"
+          style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#EF4444' }}
           title="Clear Chat"
         >
           <Trash2 size={10} />
@@ -380,14 +364,18 @@ export default function ChatScreen() {
 
       {/* Session contribution banner */}
       {sessionContrib != null && (
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 mx-4 mb-2 px-4 py-2.5 shrink-0 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-          <span className="text-emerald-700 text-xs font-medium flex-1">
+        <div
+          className="rounded-2xl mx-4 mb-2 px-4 py-2.5 shrink-0 flex items-center gap-2"
+          style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--text-muted)' }} />
+          <span className="text-xs font-medium flex-1" style={{ color: 'var(--text-2)' }}>
             Session contribution: {formatRupees(sessionContrib)}
           </span>
           <button
             onClick={() => setSessContrib(null)}
-            className="text-emerald-300 hover:text-emerald-500 transition-colors leading-none"
+            className="transition-colors leading-none"
+            style={{ color: 'var(--text-faint)' }}
             aria-label="Clear contribution"
           >
             ×
@@ -396,20 +384,31 @@ export default function ChatScreen() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-surface-page px-4 py-3 space-y-1">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1" style={{ background: 'var(--bg)' }}>
         {msgs.map((m, i) => <Bubble key={i} msg={m} isFirst={i === 0} dispatch={dispatch} />)}
         {isTyping && <TypingBubble />}
         <div ref={scrollRef} />
       </div>
 
-      {/* Input area — padded for iPhone home bar */}
+      {/* Input area */}
       <div
-        className="shrink-0 bg-white border-t border-gray-100 px-4 pt-3"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+        className="shrink-0"
+        style={{
+          background: 'var(--bg-card)',
+          borderTop: '1px solid var(--border)',
+          padding: '0.75rem 1rem',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)',
+        }}
       >
         <div className="flex items-center gap-2">
           <input
-            className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm flex-1 focus:bg-white focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 text-ink placeholder-gray-400 transition-all"
+            className="flex-1 rounded-2xl px-4 py-3 text-sm transition-all"
+            style={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              outline: 'none',
+            }}
             placeholder={hintText()}
             value={input}
             disabled={isTyping}
@@ -419,8 +418,8 @@ export default function ChatScreen() {
           <button
             onClick={send}
             disabled={isTyping || !input.trim()}
-            className="shrink-0 w-11 h-11 rounded-xl text-white flex items-center justify-center shadow-sm hover:shadow-glow active:scale-95 transition-all disabled:opacity-40 disabled:shadow-none disabled:active:scale-100"
-            style={{ background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)' }}
+            className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+            style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
           >
             <Send size={17} />
           </button>
@@ -431,16 +430,16 @@ export default function ChatScreen() {
 }
 
 function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispatch: React.Dispatch<any> }) {
-  const [saved,       setSaved]       = useState(false);
-  const [shareOpen,   setShareOpen]   = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const isResult = msg.text.includes('──');
 
   if (msg.isUser) {
     return (
       <div className="flex justify-end mb-3">
         <div
-          className="max-w-[78%] rounded-2xl rounded-br-sm text-white text-sm px-4 py-2.5 shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)' }}
+          className="max-w-[78%] rounded-2xl rounded-br-sm text-sm px-4 py-2.5"
+          style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
         >
           {msg.text}
         </div>
@@ -458,52 +457,66 @@ function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispa
     setTimeout(() => setSaved(false), 2000);
   }
 
-  /* Welcome / first bot message gets a special card treatment */
   if (isFirst) {
     return (
       <div className="flex justify-start mb-3">
         <div className="max-w-[82%]">
-          <div className="bg-white shadow-card border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
+          <div
+            className="rounded-2xl rounded-tl-sm px-4 py-3"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+          >
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
-                <MessageCircle size={12} className="text-brand-500" />
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}
+              >
+                <MessageCircle size={12} style={{ color: 'var(--text-2)' }} />
               </div>
-              <span className="text-xs font-semibold text-brand-600 uppercase tracking-wide">Yarn Assistant</span>
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                Yarn Assistant
+              </span>
             </div>
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm text-ink leading-relaxed">{msg.text}</pre>
+            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
+              {msg.text}
+            </pre>
           </div>
         </div>
       </div>
     );
   }
 
-  /* Result bubble — monospace code-block style */
   if (isResult) {
     return (
       <>
         <ShareModal text={msg.text} open={shareOpen} onClose={() => setShareOpen(false)} />
         <div className="flex justify-start mb-2">
           <div className="max-w-[82%]">
-            <div className="bg-white shadow-card border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-ink">
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 mt-1">
-                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-gray-600">{msg.text}</pre>
+            <div
+              className="rounded-2xl rounded-tl-sm px-4 py-3 text-sm"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+            >
+              <div className="rounded-xl p-3 mt-1" style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                  {msg.text}
+                </pre>
               </div>
             </div>
-            <div className="chip flex items-center gap-1 mt-1.5 ml-1">
+            <div className="flex items-center gap-1.5 mt-1.5 ml-1">
               <button
                 onClick={handleSave}
-                className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                  saved
-                    ? 'bg-brand-50 border-brand-100 text-brand-600'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500'
-                }`}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full transition-all active:scale-95"
+                style={saved
+                  ? { background: 'var(--accent-soft)', border: '1px solid var(--border)', color: 'var(--text)' }
+                  : { background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }
+                }
               >
                 {saved ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
                 {saved ? 'Saved!' : 'Save'}
               </button>
               <button
                 onClick={() => setShareOpen(true)}
-                className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors bg-white border-gray-200 text-gray-500 hover:border-brand-200 hover:text-brand-500"
+                className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full transition-all active:scale-95"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
               >
                 <Share2 size={11} />
                 Share
@@ -515,12 +528,16 @@ function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispa
     );
   }
 
-  /* Standard bot bubble */
   return (
     <div className="flex justify-start mb-3">
       <div className="max-w-[82%]">
-        <div className="bg-white shadow-card border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-ink">
-          <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed">{msg.text}</pre>
+        <div
+          className="rounded-2xl rounded-tl-sm px-4 py-3 text-sm"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+        >
+          <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed" style={{ color: 'var(--text)' }}>
+            {msg.text}
+          </pre>
         </div>
       </div>
     </div>
@@ -530,13 +547,16 @@ function Bubble({ msg, isFirst, dispatch }: { msg: Msg; isFirst?: boolean; dispa
 function TypingBubble() {
   return (
     <div className="flex justify-start mb-3">
-      <div className="bg-white border border-gray-100 shadow-card rounded-2xl rounded-tl-sm px-4 py-3">
+      <div
+        className="rounded-2xl rounded-tl-sm px-4 py-3"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+      >
         <div className="flex gap-1.5 items-center h-4">
           {[0, 1, 2].map(i => (
             <span
               key={i}
-              className="w-2 h-2 bg-brand-400 rounded-full animate-pulse2"
-              style={{ animationDelay: `${i * 0.2}s` }}
+              className="w-2 h-2 rounded-full animate-pulse2"
+              style={{ background: 'var(--text-muted)', animationDelay: `${i * 0.2}s` }}
             />
           ))}
         </div>
@@ -552,19 +572,35 @@ async function claudeParse(
 ): Promise<{ query: ParsedQuery; rawJson: string }> {
   const system = `You are a yarn query parser with conversation memory. Extract structured data from the user's latest message and return ONLY valid JSON.
 
-Use conversation history to infer missing context:
+IMPORTANT — handle typos and abbreviations: map the user's input to the closest canonical yarn_type even if they misspell or abbreviate it.
+
+Canonical yarn_type values (use EXACTLY these strings):
+Viscose | Modal | Micro Modal | Excel | Liva Eco | Micro Liva Eco | Anti-Bacterial | Liva Reviva | Eco Vero | Refibra | Tencel STD | Micro EcoVero | Micro Tencel
+
+Typo / alias mapping examples (not exhaustive — use judgment for similar cases):
+- vsf, visc, viscos, viscous → Viscose
+- mm, micro mod → Micro Modal
+- mev, micro eco vera, micro eco varo → Micro EcoVero
+- eco vera, eco varo, eco veru, ecovera, ekovero → Eco Vero
+- refib, refibre, refibra → Refibra
+- tensel, tencil, tensal, tensal → Tencel STD
+- reviva, liva revi → Liva Reviva
+- ht → High Twist (sub_type)
+- ring, compact, cpt → Normal (sub_type)
+- knitting, hosiery → knitting (end_use)
+- weaving, woven → weaving (end_use)
+
+Conversation memory rules:
 - If the user says "same", "it", "that" or omits a previously mentioned yarn type/sub-type, carry it forward from history.
 - If only a count is mentioned (e.g. "40s"), keep the previous yarn_type and sub_type.
 - If a new yarn type is explicitly mentioned, reset sub_type unless the user specifies one.
 
-Available yarn_type: Viscose, Modal, Micro Modal, Excel, Liva Eco, Micro Liva Eco, Anti-Bacterial, Liva Reviva, Eco Vero, Refibra, Tencel STD, Micro EcoVero, Micro Tencel
-Available sub_type: Normal, High Twist, Slub, High Twist Slub, Micro Viscose, Micro Excel, Doubling
-Aliases: vsf→Viscose, mm→Micro Modal, mev→Micro EcoVero, ht→High Twist, ring/compact/cpt→Normal, knitting/hosiery→knitting end_use, weaving/woven→weaving end_use
+Available sub_type: Normal | High Twist | Slub | High Twist Slub | Micro Viscose | Micro Excel | Doubling
 
-Return exactly: {"count":null,"yarn_type":null,"sub_type":null,"end_use":null,"is_doubled":false}`;
+Return ONLY this JSON, no other text: {"count":null,"yarn_type":null,"sub_type":null,"end_use":null,"is_doubled":false}`;
 
   const messages: ConversationMsg[] = [
-    ...history.slice(-8), // last 4 turns for context
+    ...history.slice(-8),
     { role: 'user', content: input },
   ];
 

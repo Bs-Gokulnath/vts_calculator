@@ -27,13 +27,19 @@ export default function SettingsScreen() {
     : '?';
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
       {/* Header */}
-      <header className="page-header shrink-0 flex items-center justify-between px-4 py-3">
+      <header className="page-header shrink-0 flex items-center justify-between">
         <h1 className="page-title text-lg font-bold">Settings</h1>
         {/* User avatar chip */}
-        <div className="flex items-center gap-1.5 bg-brand-50 text-brand-700 rounded-full px-2.5 py-1 text-xs font-medium max-w-[140px]">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-200 text-brand-800 text-[10px] font-bold shrink-0">
+        <div
+          className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium max-w-[160px]"
+          style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)' }}
+        >
+          <span
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0"
+            style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
+          >
             {initials}
           </span>
           <span className="truncate">{user?.name ?? ''}</span>
@@ -41,16 +47,19 @@ export default function SettingsScreen() {
       </header>
 
       {/* Tab bar */}
-      <div className="flex overflow-x-auto bg-white border-b border-gray-100 shrink-0 scrollbar-hide px-2 py-1.5 gap-1">
+      <div
+        className="flex overflow-x-auto shrink-0 px-2 py-1.5 gap-1"
+        style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}
+      >
         {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs whitespace-nowrap shrink-0 rounded-xl transition-colors ${
-              tab === id
-                ? 'bg-brand-50 text-brand-700 font-semibold'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs whitespace-nowrap shrink-0 rounded-xl transition-all"
+            style={tab === id
+              ? { background: 'var(--accent)', color: 'var(--accent-fg)', fontWeight: 600 }
+              : { background: 'transparent', color: 'var(--text-muted)' }
+            }
           >
             <Icon size={14} />
             {label}

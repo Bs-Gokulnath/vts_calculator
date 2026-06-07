@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Orange triangle (large, wide) -->
+  <polygon
+    points="46,6 4,94 82,94"
+    fill="#F5A020"
+  />
+  <!-- Green triangle (narrow, overlapping right side) -->
+  <polygon
+    points="65,4 53,94 88,50"
+    fill="#2D7D1A"
+  />
+</svg>

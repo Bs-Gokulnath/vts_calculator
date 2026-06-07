@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Sun, Moon } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function SignInScreen() {
   const { loginWithGoogle } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
@@ -24,52 +26,71 @@ export default function SignInScreen() {
   });
 
   return (
-    <div className="min-h-[100dvh] relative flex flex-col items-center justify-center overflow-hidden px-5"
-      style={{ background: 'linear-gradient(145deg, #2E1065 0%, #4C1D95 25%, #6D28D9 55%, #7C3AED 75%, #8B5CF6 100%)' }}>
-
-      {/* Background orbs */}
-      <div className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-20"
-        style={{ background: 'radial-gradient(circle, #A78BFA, transparent 70%)' }} />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 w-80 h-80 rounded-full opacity-15"
-        style={{ background: 'radial-gradient(circle, #C4B5FD, transparent 70%)' }} />
-      <div className="pointer-events-none absolute top-1/3 right-8 w-48 h-48 rounded-full opacity-10"
-        style={{ background: 'radial-gradient(circle, #DDD6FE, transparent 70%)' }} />
+    <div
+      className="min-h-[100dvh] relative flex flex-col items-center justify-center overflow-hidden px-5"
+      style={{ background: 'var(--bg)' }}
+    >
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        className="btn-icon absolute top-5 right-5 z-20"
+        aria-label="Toggle theme"
+      >
+        {theme === 'dark'
+          ? <Sun size={20} style={{ color: 'var(--text-muted)' }} />
+          : <Moon size={20} style={{ color: 'var(--text-muted)' }} />
+        }
+      </button>
 
       {/* Brand */}
       <div className="relative z-10 flex flex-col items-center mb-10 text-center">
-        <div className="w-20 h-20 mb-5 rounded-[28px] flex items-center justify-center shadow-2xl"
-          style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(20px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+        <div
+          className="w-20 h-20 mb-5 rounded-[28px] flex items-center justify-center shadow-lg"
+          style={{
+            background: 'var(--accent)',
+            border: '1px solid var(--border)',
+          }}
+        >
           <span className="text-4xl select-none">🧵</span>
         </div>
-        <h1 className="text-[28px] font-black text-white tracking-tight leading-tight">
+        <h1
+          className="text-[28px] font-black tracking-tight leading-tight"
+          style={{ color: 'var(--text)' }}
+        >
           Yarn Cost<br />Calculator
         </h1>
-        <p className="mt-2 text-sm font-medium" style={{ color: 'rgba(221,214,254,0.8)' }}>
+        <p className="mt-2 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
           VT Sons &nbsp;·&nbsp; Professional Pricing Tool
         </p>
       </div>
 
       {/* Card */}
-      <div className="relative z-10 w-full max-w-sm rounded-[28px] p-8 animate-pop"
+      <div
+        className="relative z-10 w-full max-w-sm rounded-[28px] p-8 animate-pop"
         style={{
-          background: 'rgba(255,255,255,0.97)',
-          backdropFilter: 'blur(40px)',
-          boxShadow: '0 32px 64px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.15)',
-        }}>
-
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+      >
         <div className="mb-7 text-center">
-          <h2 className="text-xl font-bold text-ink">Welcome back</h2>
-          <p className="text-sm text-gray-400 mt-1">Sign in to your account to continue</p>
+          <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Welcome back</h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+            Sign in to your account to continue
+          </p>
         </div>
 
         <button
           type="button"
           disabled={loading}
           onClick={() => { setError(''); googleLogin(); }}
-          className="w-full h-14 flex items-center justify-center gap-3.5 rounded-2xl text-sm font-semibold text-gray-700 transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
-          style={{ background: '#FFF', border: '1.5px solid #E5E7EB', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
-          onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)')}
-          onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)')}
+          className="w-full h-14 flex items-center justify-center gap-3.5 rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1.5px solid var(--border-hard)',
+            color: 'var(--text)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
         >
           {loading
             ? <span className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
@@ -78,20 +99,22 @@ export default function SignInScreen() {
         </button>
 
         {error && (
-          <div className="mt-4 rounded-xl px-4 py-3 flex items-start gap-2.5 animate-fade-in"
-            style={{ background: '#FFF1F2', border: '1px solid #FECDD3' }}>
+          <div
+            className="mt-4 rounded-xl px-4 py-3 flex items-start gap-2.5 animate-fade-in"
+            style={{ background: '#FFF1F2', border: '1px solid #FECDD3' }}
+          >
             <span className="text-red-500 shrink-0 mt-0.5">⚠</span>
             <p className="text-xs text-red-600 leading-relaxed">{error}</p>
           </div>
         )}
 
-        <div className="mt-5 flex items-center justify-center gap-1.5 text-gray-400">
+        <div className="mt-5 flex items-center justify-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
           <ShieldCheck size={13} className="text-emerald-500" />
           <span className="text-[11px]">Restricted to @vtyarns.com accounts</span>
         </div>
       </div>
 
-      <p className="relative z-10 mt-8 text-[11px]" style={{ color: 'rgba(196,181,253,0.5)' }}>
+      <p className="relative z-10 mt-8 text-[11px]" style={{ color: 'var(--text-faint)' }}>
         © 2025 VT Sons. All rights reserved.
       </p>
     </div>

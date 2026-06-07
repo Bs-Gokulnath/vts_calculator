@@ -10,34 +10,30 @@ export default function HistoryScreen() {
 
   if (state.history.length === 0) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
         <header className="page-header shrink-0">
           <div className="flex items-center justify-center gap-2">
-            <Bookmark size={20} className="text-white/80" />
+            <Bookmark size={20} style={{ color: 'rgba(255,255,255,0.7)' }} />
             <h1 className="text-lg font-bold text-white">Saved Quotes</h1>
           </div>
         </header>
 
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-6">
-          <div className="relative">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-brand-100 via-brand-200 to-brand-300 flex items-center justify-center shadow-lg shadow-brand-200/60">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-white/70 to-brand-100/80 flex items-center justify-center backdrop-blur-sm">
-                <Bookmark size={44} className="text-brand-400" strokeWidth={1.5} />
-              </div>
-            </div>
-            <div className="absolute -inset-2 rounded-full bg-gradient-to-br from-brand-100/30 to-transparent blur-md -z-10" />
+          <div
+            className="w-24 h-24 rounded-full flex items-center justify-center"
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+          >
+            <Bookmark size={40} style={{ color: 'var(--text-faint)' }} strokeWidth={1.5} />
           </div>
-
-          <div className="space-y-2.5">
-            <p className="text-gray-800 font-bold text-lg tracking-tight">No saved quotes yet</p>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-[220px] mx-auto">
-              Share quotes from the Calculator or Chat to save them here
+          <div className="space-y-2">
+            <p className="font-bold text-lg" style={{ color: 'var(--text)' }}>No saved quotes yet</p>
+            <p className="text-sm leading-relaxed max-w-[220px] mx-auto" style={{ color: 'var(--text-muted)' }}>
+              Save quotes from the Calculator or Chat to find them here
             </p>
           </div>
-
-          <div className="inline-flex items-center gap-1.5 text-brand-500 text-sm font-semibold mt-1 group">
+          <div className="inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
             <span>Go to Calculator</span>
-            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight size={15} />
           </div>
         </div>
       </div>
@@ -45,25 +41,32 @@ export default function HistoryScreen() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="page-header shrink-0">
-        <div className="flex-1 flex items-center justify-center gap-2">
-          <Bookmark size={18} className="text-white/80" />
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
+      <header className="page-header shrink-0 relative flex items-center justify-center">
+        <div className="flex items-center gap-2">
+          <Bookmark size={18} style={{ color: 'rgba(255,255,255,0.7)' }} />
           <h1 className="text-lg font-bold text-white">Saved Quotes</h1>
-          <span className="ml-1 bg-white/25 text-white text-xs font-bold px-2.5 py-0.5 rounded-full ring-1 ring-white/20">
+          <span
+            className="ml-1 text-xs font-bold px-2.5 py-0.5 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}
+          >
             {state.history.length}
           </span>
         </div>
         <button
           onClick={() => setConfirming(true)}
-          className="absolute right-4 p-2 text-white/70 hover:text-white hover:bg-white/15 rounded-xl transition-colors"
+          className="absolute right-4 p-2 rounded-xl transition-all active:scale-90"
+          style={{ color: 'rgba(255,255,255,0.7)' }}
           title="Clear all"
         >
           <Trash2 size={18} />
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}>
+      <div
+        className="flex-1 overflow-y-auto p-3 space-y-3"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+      >
         {state.history.map((h, i) => (
           <HistoryCard
             key={h.id}
@@ -77,24 +80,24 @@ export default function HistoryScreen() {
       {confirming && (
         <div className="dialog-overlay">
           <div className="dialog-panel">
-            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-red-50 to-red-100 ring-1 ring-red-200 mx-auto mb-4 shadow-sm">
+            <div
+              className="flex items-center justify-center w-14 h-14 rounded-full mx-auto mb-4"
+              style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
+            >
               <Trash2 size={24} className="text-red-500" />
             </div>
-            <h3 className="font-bold text-gray-900 text-center text-base mb-1.5">Clear All Quotes?</h3>
-            <p className="text-gray-500 text-sm text-center mb-6 leading-relaxed">
+            <h3 className="font-bold text-center text-base mb-1.5" style={{ color: 'var(--text)' }}>
+              Clear All Quotes?
+            </h3>
+            <p className="text-sm text-center mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               This will permanently remove all{' '}
-              <span className="font-semibold text-gray-700">{state.history.length}</span> saved quote{state.history.length !== 1 ? 's' : ''}.
-              This action cannot be undone.
+              <span className="font-semibold" style={{ color: 'var(--text)' }}>{state.history.length}</span>{' '}
+              saved quote{state.history.length !== 1 ? 's' : ''}. This action cannot be undone.
             </p>
             <div className="flex gap-3">
+              <button className="btn-outline flex-1" onClick={() => setConfirming(false)}>Cancel</button>
               <button
-                className="btn-outline flex-1 py-2.5"
-                onClick={() => setConfirming(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-danger flex-1 py-2.5"
+                className="btn-danger flex-1"
                 onClick={() => { dispatch({ type: 'CLEAR_HISTORY' }); setConfirming(false); }}
               >
                 Clear All
@@ -107,73 +110,78 @@ export default function HistoryScreen() {
   );
 }
 
-function HistoryCard({
-  item,
-  index,
-  onDelete,
-}: {
+function HistoryCard({ item, index, onDelete }: {
   item: QuoteHistory;
   index: number;
   onDelete: () => void;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
 
-  const formattedDate = formatDate(new Date(item.savedAt));
-
   return (
     <>
-    <ShareModal text={item.text} open={shareOpen} onClose={() => setShareOpen(false)} />
-    <div
-      className="card border-l-4 border-brand-400 p-0 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
-      style={{ animationDelay: `${index * 40}ms` }}
-    >
-      <div className="p-4 space-y-3">
-        {/* Header row */}
-        <div className="flex items-center gap-2">
-          <p className="flex-1 font-bold text-gray-900 text-sm truncate">
-            {item.material}
-          </p>
-          <span className="shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-500 text-xs font-semibold ring-1 ring-brand-100">
-            {formattedDate}
-          </span>
-        </div>
-
-        {/* macOS-style code window */}
-        <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100/80 border-b border-gray-200">
-            <div className="flex gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-              <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
-              <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
-            </div>
-            <span className="text-xs text-gray-400 font-medium ml-1 tracking-wide">Quote</span>
+      <ShareModal text={item.text} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <div
+        className="card overflow-hidden animate-in"
+        style={{ borderLeft: '3px solid var(--accent)', animationDelay: `${index * 40}ms` }}
+      >
+        <div className="p-4 space-y-3">
+          {/* Header row */}
+          <div className="flex items-center gap-2">
+            <p className="flex-1 font-bold text-sm truncate" style={{ color: 'var(--text)' }}>
+              {item.material}
+            </p>
+            <span
+              className="shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full"
+              style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+            >
+              {formatDate(new Date(item.savedAt))}
+            </span>
           </div>
-          <pre className="font-mono text-xs bg-gray-50 p-3 rounded-b-xl text-gray-600 whitespace-pre-wrap leading-relaxed">
-            {item.text}
-          </pre>
-        </div>
 
-        {/* Action row */}
-        <div className="flex items-center gap-2 pt-0.5">
-          <button
-            onClick={() => setShareOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand-500 text-white hover:bg-brand-600 active:scale-95 text-xs font-semibold transition-all shadow-sm shadow-brand-200"
-            title="Share"
-          >
-            <Share2 size={12} />
-            <span>Share</span>
-          </button>
-          <button
-            onClick={onDelete}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 active:scale-95 text-xs font-semibold transition-all ring-1 ring-red-100"
-            title="Delete"
-          >
-            <Trash2 size={12} />
-            <span>Delete</span>
-          </button>
+          {/* Code window */}
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+            <div
+              className="flex items-center gap-2 px-3 py-2"
+              style={{ background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)' }}
+            >
+              <div className="flex gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
+              </div>
+              <span className="text-xs font-medium ml-1 tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                Quote
+              </span>
+            </div>
+            <pre
+              className="font-mono text-xs p-3 whitespace-pre-wrap leading-relaxed"
+              style={{ background: 'var(--bg-subtle)', color: 'var(--text-2)' }}
+            >
+              {item.text}
+            </pre>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-0.5">
+            <button
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+              style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
+            >
+              <Share2 size={12} />
+              Share
+            </button>
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+              style={{ background: '#FEF2F2', color: '#EF4444', border: '1px solid #FECACA' }}
+            >
+              <Trash2 size={12} />
+              Delete
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }
