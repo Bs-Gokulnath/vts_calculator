@@ -4,8 +4,6 @@ import CalculatorScreen from './screens/CalculatorScreen';
 import ChatScreen from './screens/ChatScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import SignInScreen from './screens/SignInScreen';
-import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 
 const TABS = [
@@ -18,11 +16,8 @@ const TABS = [
 type TabId = typeof TABS[number]['id'];
 
 export default function App() {
-  const { isLoggedIn } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [tab, setTab] = useState<TabId>('calc');
-
-  if (!isLoggedIn) return <SignInScreen />;
 
   return (
     <div className="flex flex-col h-[100dvh] max-w-lg mx-auto" style={{ background: 'var(--bg)' }}>
@@ -34,11 +29,9 @@ export default function App() {
         {tab === 'settings' && <SettingsScreen />}
       </div>
 
-      {/* Bottom nav bar — 4 tabs + theme toggle */}
+      {/* Bottom nav — 4 tabs + theme toggle */}
       <nav className="nav-bar shrink-0">
         <div className="flex h-[60px]">
-
-          {/* Tabs */}
           {TABS.map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
@@ -70,11 +63,7 @@ export default function App() {
             );
           })}
 
-          {/* Theme toggle — separated by a subtle divider */}
-          <div
-            className="w-px my-3 shrink-0"
-            style={{ background: 'var(--border)' }}
-          />
+          <div className="w-px my-3 shrink-0" style={{ background: 'var(--border)' }} />
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
@@ -88,7 +77,6 @@ export default function App() {
               {theme === 'dark' ? 'Light' : 'Dark'}
             </span>
           </button>
-
         </div>
       </nav>
     </div>
