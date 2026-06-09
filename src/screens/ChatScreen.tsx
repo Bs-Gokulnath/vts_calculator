@@ -86,7 +86,90 @@ export default function ChatScreen() {
     return q;
   }
 
+  // Detects "change contribution to 55000", "contribution 55000", "set contrib 50000", etc.
+  function parseContribChange(input: string): number | null {
+    const s = input.toLowerCase();
+    if (!s.includes('contrib')) return null;
+    const m = s.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+    if (!m) return null;
+    const val = parseFloat(m[1].replace(/,/g, ''));
+    return !isNaN(val) && val > 0 ? val : null;
+  }
+
+  // Detects "tpi 36", "for tpi 40", "tpi36", etc.
+  function parseTpiChange(input: string): number | null {
+    const s = input.toLowerCase();
+    if (!s.includes('tpi')) return null;
+    const m = s.match(/tpi\s*(\d+)/);
+    if (!m) return null;
+    const val = parseInt(m[1]);
+    return !isNaN(val) && val > 0 ? val : null;
+  }
+
+  function handleTpiChange(newTpi: number) {
+    const m  = resolvedMat.current;
+    const st = resolvedSubType.current;
+    if (!m || !st) { bot(`Please ask for a yarn price first, then specify the TPI.`); return; }
+
+    const grp     = getGroup(m.name);
+    const entries = grp ? getGroupEntries(m.name, st) : getStandaloneEntries(m.name, m.supplier);
+
+    // Extract base count number from current count (e.g. "HT 30s (TPI 32)" → "30")
+    const currentBase = resolvedCount.current?.count.match(/\b(\d+)\b/)?.[1] ?? null;
+
+    // Find entry with matching TPI (prefer same base count)
+    const tpiEntry =
+      entries.find(e => {
+        const tpiM = e.count.match(/TPI\s*(\d+)/i);
+        const base  = e.count.match(/\b(\d+)\b/)?.[1] ?? null;
+        return tpiM && parseInt(tpiM[1]) === newTpi && (!currentBase || base === currentBase);
+      }) ??
+      entries.find(e => {
+        const tpiM = e.count.match(/TPI\s*(\d+)/i);
+        return tpiM && parseInt(tpiM[1]) === newTpi;
+      });
+
+    if (tpiEntry) {
+      resolvedCount.current = tpiEntry;
+      showResult();
+    } else {
+      // Show available TPI options
+      const opts = entries
+        .filter(e => {
+          const base = e.count.match(/\b(\d+)\b/)?.[1] ?? null;
+          return e.count.match(/TPI/i) && (!currentBase || base === currentBase);
+        })
+        .map(e => {
+          const tpiM = e.count.match(/TPI\s*(\d+)/i);
+          return tpiM ? `TPI ${tpiM[1]}` : e.count;
+        });
+      bot(opts.length > 0
+        ? `TPI ${newTpi} not available. Options: ${opts.join(', ')}`
+        : `No TPI variants found for this yarn type.`
+      );
+    }
+  }
+
   async function handleQuery(input: string) {
+    // TPI change — re-run last result with new TPI
+    const newTpi = parseTpiChange(input);
+    if (newTpi !== null) {
+      handleTpiChange(newTpi);
+      return;
+    }
+
+    // Contribution change — re-run last result with new contribution
+    const newContrib = parseContribChange(input);
+    if (newContrib !== null) {
+      setSessContrib(newContrib);
+      if (resolvedMat.current) {
+        showResult(newContrib);
+      } else {
+        bot(`Contribution set to ₹${newContrib.toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`);
+      }
+      return;
+    }
+
     pendingQuery.current = null;
     resolvedMat.current = resolvedSubType.current = resolvedCount.current = resolvedDoubling.current = resolvedEndUse.current = null;
     setIsTyping(true);
@@ -185,7 +268,8 @@ export default function ChatScreen() {
     showResult();
   }
 
-  function showResult() {
+  // contribOverride lets us call showResult with a new contribution before state updates
+  function showResult(contribOverride?: number) {
     const m          = resolvedMat.current!;
     const cleanFibre = exMillIncTransport(m) * (1 + m.wastePercent / 100);
     const sub        = resolvedSubType.current;
@@ -193,6 +277,7 @@ export default function ChatScreen() {
     const dr         = resolvedDoubling.current;
     const eu         = resolvedEndUse.current;
     const prod       = ce ? productionRounded(ce) : null;
+    const contrib    = contribOverride ?? sessionContrib;
 
     const header = [m.name, sub && sub !== 'Normal' ? sub : null, `(${m.supplier})`].filter(Boolean).join(' • ');
     const lines: (string | null)[] = [
@@ -205,18 +290,18 @@ export default function ChatScreen() {
       dr ? `Count:         ${dr.count}` : null,
       dr ? `Doubling Rate: ₹${dr.rate.toFixed(0)}` : null,
       dr ? '' : null,
-      `Yarn Rate:       ₹${m.exMillRate.toFixed(2)}`,
+      `Fibre Rate:       ₹${m.exMillRate.toFixed(2)}`,
       `Waste:           ${m.wastePercent.toFixed(1)}%`,
       '──────────────────────────',
       `Clean Fibre Price: ₹${cleanFibre.toFixed(2)}`,
     ];
 
-    if (prod && prod > 0 && sessionContrib != null) {
-      const rate   = sessionContrib / prod;
+    if (prod && prod > 0 && contrib != null) {
+      const rate   = contrib / prod;
       const exMill = rate + cleanFibre;
       lines.push(
-        '',
-        `Rate / kg:    ₹${rate.toFixed(2)}`,
+        `Contribution: ₹${contrib.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        `Production Cost:    ₹${rate.toFixed(2)}`,
         '──────────────────────────',
         `Ex Mill Rate: ₹${exMill.toFixed(2)}`,
       );
@@ -227,7 +312,7 @@ export default function ChatScreen() {
       const hint = state.contributions.length > 0
         ? ` (${state.contributions.slice(0,4).map(v => `₹${v.toFixed(0)}`).join(', ')}…)`
         : '';
-      bot(`Enter contribution amount${hint} to get the Yarn Rate:`);
+      bot(`Enter contribution amount${hint} to get the Fibre Rate:`);
     } else {
       bot((lines.filter(l => l != null) as string[]).join('\n'));
     }
@@ -273,7 +358,8 @@ export default function ChatScreen() {
       const rate = val / prod;
       const exMill = rate + cleanFibre;
       bot([
-        `Rate / kg:    ₹${rate.toFixed(2)}`,
+        `Contribution: ₹${val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        `Production Cost:    ₹${rate.toFixed(2)}`,
         '──────────────────────────',
         `Ex Mill Rate: ₹${exMill.toFixed(2)}`,
       ].join('\n'));
