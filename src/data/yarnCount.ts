@@ -1,3 +1,28 @@
+export type SpindleType = 'nCompact' | 'compact' | 'siro' | 'slub';
+
+export interface MachineParam {
+  count: number;
+  tm: Record<SpindleType, number>;
+  tpi: Record<SpindleType, number>;
+  spindleSpeed: Record<SpindleType, number>;
+  efficiency: Record<SpindleType, number>;
+}
+
+export const MACHINE_PARAMS: MachineParam[] = [
+  { count: 12, tm: { nCompact: 3.5,  compact: 3.2, siro: 3.4, slub: 3.75 }, tpi: { nCompact: 12.12, compact: 11.09, siro: 11.43, slub: 12.99 }, spindleSpeed: { nCompact: 14000, compact: 14000, siro: 14000, slub: 12000 }, efficiency: { nCompact: 88, compact: 87, siro: 87, slub: 86 } },
+  { count: 15, tm: { nCompact: 3.4,  compact: 3.0, siro: 3.3, slub: 3.70 }, tpi: { nCompact: 13.17, compact: 11.62, siro: 12.78, slub: 14.33 }, spindleSpeed: { nCompact: 16000, compact: 16000, siro: 16000, slub: 15000 }, efficiency: { nCompact: 88, compact: 87, siro: 87, slub: 86 } },
+  { count: 16, tm: { nCompact: 3.4,  compact: 3.0, siro: 3.3, slub: 3.70 }, tpi: { nCompact: 13.60, compact: 12.00, siro: 12.80, slub: 14.80 }, spindleSpeed: { nCompact: 16500, compact: 16500, siro: 16500, slub: 16500 }, efficiency: { nCompact: 89, compact: 88, siro: 88, slub: 87 } },
+  { count: 20, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 14.98, compact: 13.42, siro: 14.31, slub: 16.55 }, spindleSpeed: { nCompact: 18000, compact: 18000, siro: 18000, slub: 18000 }, efficiency: { nCompact: 90, compact: 89, siro: 89, slub: 88 } },
+  { count: 21, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 15.35, compact: 13.75, siro: 14.66, slub: 16.96 }, spindleSpeed: { nCompact: 18500, compact: 18500, siro: 18500, slub: 18000 }, efficiency: { nCompact: 90, compact: 89, siro: 89, slub: 88 } },
+  { count: 24, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 16.41, compact: 14.70, siro: 15.68, slub: 18.13 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18000 }, efficiency: { nCompact: 91, compact: 90, siro: 90, slub: 89 } },
+  { count: 27, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 17.41, compact: 15.59, siro: 16.63, slub: 19.23 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18000 }, efficiency: { nCompact: 92, compact: 91, siro: 91, slub: 90 } },
+  { count: 28, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 17.73, compact: 15.87, siro: 16.93, slub: 19.58 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18000 }, efficiency: { nCompact: 92, compact: 91, siro: 91, slub: 90 } },
+  { count: 30, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 18.35, compact: 16.43, siro: 17.53, slub: 20.27 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18500 }, efficiency: { nCompact: 92, compact: 91, siro: 91, slub: 90 } },
+  { count: 31, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 18.65, compact: 16.70, siro: 17.82, slub: 20.60 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18500 }, efficiency: { nCompact: 92, compact: 91, siro: 91, slub: 90 } },
+  { count: 34, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 19.53, compact: 17.49, siro: 18.66, slub: 21.57 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18500 }, efficiency: { nCompact: 93, compact: 92, siro: 92, slub: 91 } },
+  { count: 40, tm: { nCompact: 3.35, compact: 3.0, siro: 3.2, slub: 3.70 }, tpi: { nCompact: 21.19, compact: 18.97, siro: 20.24, slub: 23.40 }, spindleSpeed: { nCompact: 19000, compact: 19000, siro: 19000, slub: 18500 }, efficiency: { nCompact: 95, compact: 94, siro: 94, slub: 93 } },
+];
+
 export interface YarnCountEntry { count: string; gps: number | null; }
 export interface DoublingRate   { count: string; rate: number; }
 export interface YarnCountCategory { name: string; entries: YarnCountEntry[]; }

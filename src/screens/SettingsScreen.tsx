@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { Package, List, PiggyBank, FunctionSquare, Sparkles } from 'lucide-react';
+import { Package, List, PiggyBank, FunctionSquare, Sparkles, Gauge } from 'lucide-react';
 import RawMaterialsTab from '../components/settings/RawMaterialsTab';
 import CountsTab from '../components/settings/CountsTab';
 import ContributionsTab from '../components/settings/ContributionsTab';
 import FormulasTab from '../components/settings/FormulasTab';
 import AiSettingsTab from '../components/settings/AiSettingsTab';
+import MachineParamsTab from '../components/settings/MachineParamsTab';
 
 const TABS = [
   { id: 'materials',     label: 'Raw Materials', Icon: Package        },
   { id: 'counts',        label: 'Counts',        Icon: List           },
   { id: 'contributions', label: 'Contributions', Icon: PiggyBank      },
   { id: 'formulas',      label: 'Formulas',      Icon: FunctionSquare },
+  { id: 'machine',       label: 'Machine',       Icon: Gauge          },
   { id: 'ai',            label: 'AI',            Icon: Sparkles       },
 ] as const;
 type TabId = typeof TABS[number]['id'];
@@ -51,6 +53,7 @@ export default function SettingsScreen() {
         {tab === 'counts'        && <CountsTab />}
         {tab === 'contributions' && <ContributionsTab />}
         {tab === 'formulas'      && <FormulasTab />}
+        {tab === 'machine'       && <MachineParamsTab />}
         {tab === 'ai'            && <AiSettingsTab />}
       </div>
     </div>
