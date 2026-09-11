@@ -13,7 +13,7 @@ import {
   SPINDLE_TYPE_BY_LABEL, getMachineParam,
 } from '../data/yarnCount';
 
-type Awaiting = 'none' | 'materialChoice' | 'subType' | 'contribution';
+type Awaiting = 'none' | 'materialChoice' | 'subType' | 'count' | 'contribution';
 type ConversationMsg = { role: 'user' | 'assistant'; content: string };
 interface Msg { text: string; isUser: boolean; }
 
@@ -21,9 +21,20 @@ export default function ChatScreen() {
   const { state, dispatch } = useApp();
   const CHAT_STORAGE_KEY = 'vtsChatMessages';
   const WELCOME_MSG: Msg = {
-    text: 'Hi! Ask me for yarn prices.\n\nExamples:\n• 30 viscose compact\n• 30/1 HT price\n• 30s slub price\n• 40 MM knitting\n• 30/2 weaving',
+    text: 'Hi! Ask me for yarn prices.\n\nExamples:\n• 30 viscose compact\n• 30/1 HT price\n• 30s slub price\n• 40 MM knitting\n• 30/2 weaving\n\nMissing details? I\'ll ask. Type "help" anytime for more.',
     isUser: false,
   };
+  const HELP_MSG =
+    'What I can do:\n\n' +
+    '• Ask for a price: "12 viscose compact", "30/1 HT price", "40 MM knitting"\n' +
+    '• Leave out details and I\'ll ask for them one at a time (yarn type → sub-type → count)\n' +
+    '• Change count: "siro" or "16" — I\'ll reuse whatever you asked last\n' +
+    '• Change contribution: "contribution 55000", "contrib 50k", "1.2 lakh contribution"\n' +
+    '• Change TPI: "tpi 36"\n' +
+    '• Change Spindle Speed: "speed 18000"\n' +
+    '• Change Efficiency: "efficiency 90"\n' +
+    '  (TPI/Spindle Speed/Efficiency only apply to N Compact, Compact, Siro and Slub)\n\n' +
+    'Type "clear" to reset the conversation.';
 
   const [msgs, setMsgsRaw] = useState<Msg[]>(() => {
     try {
@@ -46,19 +57,24 @@ export default function ChatScreen() {
   const [awaiting, setAwaiting]     = useState<Awaiting>('none');
   const [sessionContrib, setSessContrib] = useState<number | null>(60000);
 
-  const pendingQuery    = useRef<ParsedQuery | null>(null);
-  const pendingMat      = useRef<RawMaterial | null>(null);
-  const pendingChoices  = useRef<RawMaterial[]>([]);
-  const pendingSubTypes = useRef<string[]>([]);
+  const pendingQuery       = useRef<ParsedQuery | null>(null);
+  const pendingMat         = useRef<RawMaterial | null>(null);
+  const pendingChoices     = useRef<RawMaterial[]>([]);
+  const pendingSubTypes    = useRef<string[]>([]);
+  const pendingCountEntries = useRef<{ count: string; gps: number | null }[]>([]);
+  const pendingIsDoubling   = useRef(false);
 
-  const resolvedMat      = useRef<RawMaterial | null>(null);
-  const resolvedSubType  = useRef<string | null>(null);
-  const resolvedCount    = useRef<{ count: string; gps: number | null } | null>(null);
-  const resolvedDoubling = useRef<{ count: string; rate: number } | null>(null);
-  const resolvedEndUse   = useRef<string | null>(null);
+  const resolvedMat         = useRef<RawMaterial | null>(null);
+  const resolvedSubType     = useRef<string | null>(null);
+  const resolvedCount       = useRef<{ count: string; gps: number | null } | null>(null);
+  const resolvedDoubling    = useRef<{ count: string; rate: number } | null>(null);
+  const resolvedEndUse      = useRef<string | null>(null);
+  const resolvedTpiOverride          = useRef<number | null>(null);
+  const resolvedSpindleSpeedOverride = useRef<number | null>(null);
+  const resolvedEfficiencyOverride   = useRef<number | null>(null);
 
   const conversationHistory = useRef<ConversationMsg[]>([]);
-  const lastContext = useRef<{ yarnType?: string; subType?: string }>({});
+  const lastContext = useRef<{ yarnType?: string; subType?: string; count?: string }>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, isTyping]);
@@ -71,10 +87,14 @@ export default function ChatScreen() {
     if (!text || isTyping) return;
     setInput('');
     user(text);
+    const lower = text.toLowerCase();
+    if (lower === 'help' || lower === '?') { bot(HELP_MSG); return; }
+    if (lower === 'clear' || lower === 'reset') { handleClearChat(); return; }
     switch (awaiting) {
       case 'none':           await handleQuery(text); break;
       case 'materialChoice': handleMaterialChoice(text); break;
       case 'subType':        handleSubTypeChoice(text); break;
+      case 'count':          handleCountChoice(text); break;
       case 'contribution':   handleContribution(text); break;
     }
   }
@@ -87,14 +107,20 @@ export default function ChatScreen() {
     return q;
   }
 
-  // Detects "change contribution to 55000", "contribution 55000", "set contrib 50000", etc.
+  // Detects "change contribution to 55000", "contribution 55000", "set contrib 50k", "1.2 lakh", etc.
+  // Anchored to the number *after* "contrib" — a bare digit scan would misfire on inputs like
+  // "for 30s set contribution to 50000" by grabbing the "30" instead.
   function parseContribChange(input: string): number | null {
     const s = input.toLowerCase();
     if (!s.includes('contrib')) return null;
-    const m = s.match(/[₹]?\s*([\d,]+(?:\.\d+)?)/);
+    const m = s.match(/contrib\w*[^\d₹]*[₹]?\s*([\d,]+(?:\.\d+)?)\s*(k|lakh|lac|l)?/);
     if (!m) return null;
-    const val = parseFloat(m[1].replace(/,/g, ''));
-    return !isNaN(val) && val > 0 ? val : null;
+    let val = parseFloat(m[1].replace(/,/g, ''));
+    if (isNaN(val)) return null;
+    const unit = m[2];
+    if (unit === 'k') val *= 1_000;
+    else if (unit === 'lakh' || unit === 'lac' || unit === 'l') val *= 100_000;
+    return val > 0 ? val : null;
   }
 
   // Detects "tpi 36", "for tpi 40", "tpi36", etc.
@@ -107,10 +133,67 @@ export default function ChatScreen() {
     return !isNaN(val) && val > 0 ? val : null;
   }
 
+  // Detects "spindle speed 18000", "speed 18000", etc. Anchored after the trigger word for the
+  // same reason as parseContribChange above.
+  function parseSpindleSpeedChange(input: string): number | null {
+    const s = input.toLowerCase();
+    if (!/spindle\s*speed|\bspeed\b/.test(s)) return null;
+    const m = s.match(/(?:spindle\s*speed|speed)\s*(?:to|of|is|=|:)?\s*(\d{3,6})/);
+    if (!m) return null;
+    const val = parseInt(m[1]);
+    return !isNaN(val) && val > 0 ? val : null;
+  }
+
+  // Detects "efficiency 90", "eff 90", "efficiency 90%", etc. Anchored after the trigger word.
+  function parseEfficiencyChange(input: string): number | null {
+    const s = input.toLowerCase();
+    if (!/efficiency|\beff\b/.test(s)) return null;
+    const m = s.match(/(?:efficiency|eff)\s*(?:to|of|is|=|:)?\s*(\d+(?:\.\d+)?)\s*%?/);
+    if (!m) return null;
+    const val = parseFloat(m[1]);
+    return !isNaN(val) && val > 0 && val <= 100 ? val : null;
+  }
+
+  // Recomputes GPS from the formula, applying a new TPI / Spindle Speed / Efficiency value on top
+  // of whatever's already overridden, keeping the rest at their table defaults for the count.
+  function handleMachineParamChange(field: 'tpi' | 'spindleSpeed' | 'efficiency', value: number) {
+    const m  = resolvedMat.current;
+    const st = resolvedSubType.current;
+    const label = field === 'tpi' ? 'TPI' : field === 'spindleSpeed' ? 'Spindle Speed' : 'Efficiency';
+    if (!m || !st) { bot(`Please ask for a yarn price first, then specify the ${label}.`); return; }
+
+    const spindleType = SPINDLE_TYPE_BY_LABEL[st];
+    if (!spindleType) {
+      bot(`${label} can only be adjusted for N Compact / Compact / Siro / Slub sub-types.`);
+      return;
+    }
+    const countNum = resolvedCount.current ? parseInt(resolvedCount.current.count) : NaN;
+    const mp = !isNaN(countNum) ? getMachineParam(countNum) : null;
+    if (!mp) { bot(`Please ask for a yarn price with a count first, then specify the ${label}.`); return; }
+
+    const tpi          = field === 'tpi'          ? value : (resolvedTpiOverride.current          ?? mp.tpi[spindleType]);
+    const spindleSpeed = field === 'spindleSpeed' ? value : (resolvedSpindleSpeedOverride.current  ?? mp.spindleSpeed[spindleType]);
+    const efficiency   = field === 'efficiency'   ? value : (resolvedEfficiencyOverride.current    ?? mp.efficiency[spindleType]);
+
+    const newGps = (7.2 * spindleSpeed) / (tpi * countNum) * (efficiency / 100);
+    resolvedCount.current = { count: `${countNum}s`, gps: newGps };
+    if (field === 'tpi')          resolvedTpiOverride.current          = tpi;
+    if (field === 'spindleSpeed') resolvedSpindleSpeedOverride.current = spindleSpeed;
+    if (field === 'efficiency')   resolvedEfficiencyOverride.current   = efficiency;
+    showResult();
+  }
+
   function handleTpiChange(newTpi: number) {
     const m  = resolvedMat.current;
     const st = resolvedSubType.current;
     if (!m || !st) { bot(`Please ask for a yarn price first, then specify the TPI.`); return; }
+
+    // Formula-driven sub-types (N Compact / Compact / Siro / Slub) — recompute GPS live from
+    // the same formula the Calculator screen uses.
+    if (SPINDLE_TYPE_BY_LABEL[st]) {
+      handleMachineParamChange('tpi', newTpi);
+      return;
+    }
 
     const grp     = getGroup(m.name);
     const entries = grp ? getGroupEntries(m.name, st) : getStandaloneEntries(m.name, m.supplier);
@@ -132,6 +215,7 @@ export default function ChatScreen() {
 
     if (tpiEntry) {
       resolvedCount.current = tpiEntry;
+      resolvedTpiOverride.current = resolvedSpindleSpeedOverride.current = resolvedEfficiencyOverride.current = null;
       showResult();
     } else {
       // Show available TPI options
@@ -156,6 +240,20 @@ export default function ChatScreen() {
     const newTpi = parseTpiChange(input);
     if (newTpi !== null) {
       handleTpiChange(newTpi);
+      return;
+    }
+
+    // Spindle Speed change — re-run last result with new Spindle Speed
+    const newSpindleSpeed = parseSpindleSpeedChange(input);
+    if (newSpindleSpeed !== null) {
+      handleMachineParamChange('spindleSpeed', newSpindleSpeed);
+      return;
+    }
+
+    // Efficiency change — re-run last result with new Efficiency
+    const newEfficiency = parseEfficiencyChange(input);
+    if (newEfficiency !== null) {
+      handleMachineParamChange('efficiency', newEfficiency);
       return;
     }
 
@@ -192,6 +290,14 @@ export default function ChatScreen() {
       q = mergeWithContext(parseYarnQuery(input));
     }
     setIsTyping(false);
+
+    // Carry forward the last resolved count when the user didn't mention a new one — e.g.
+    // switching sub-type ("siro") after already giving a count shouldn't re-ask for it.
+    // Applies regardless of which parser produced `q`.
+    if (!q.countStr && lastContext.current.count) {
+      q = { ...q, countStr: lastContext.current.count };
+    }
+
     routeQuery(q);
   }
 
@@ -242,6 +348,37 @@ export default function ChatScreen() {
       if (match) st = match.name;
     }
 
+    // No count given — GPS/Production/Rate (or the Doubling rate) depend on it, so ask rather
+    // than silently returning a subtype-independent Clean Fibre Price that looks identical for
+    // every subtype.
+    if (!q.countStr) {
+      const entries = st === 'Doubling'
+        ? DOUBLING_RATES.map(r => ({ count: r.count, gps: null }))
+        : (grp ? getGroupEntries(m.name, st ?? '') : getStandaloneEntries(m.name, m.supplier));
+      if (entries.length > 0) {
+        resolvedMat.current         = m;
+        resolvedSubType.current     = st ?? null;
+        resolvedCount.current       = null;
+        resolvedDoubling.current    = null;
+        resolvedEndUse.current      = q.endUse;
+        resolvedTpiOverride.current = resolvedSpindleSpeedOverride.current = resolvedEfficiencyOverride.current = null;
+        // Preserve any previously known count — the user just changed material/subtype, they
+        // may still want the same count, so don't wipe it out until a new one is given.
+        lastContext.current = {
+          ...lastContext.current,
+          yarnType: m.name,
+          subType:  st && st !== 'Normal' ? st : undefined,
+        };
+        pendingCountEntries.current = entries;
+        pendingIsDoubling.current   = st === 'Doubling';
+        setAwaiting('count');
+        const label = [m.name, st].filter(Boolean).join(' ');
+        const opts  = entries.map(e => e.count.replace(/s$/, '')).join(', ');
+        bot(`What count? Available for ${label}:\n${opts}`);
+        return;
+      }
+    }
+
     let countEntry: { count: string; gps: number | null } | null = null;
     let doublingRate: { count: string; rate: number } | null     = null;
 
@@ -268,15 +405,17 @@ export default function ChatScreen() {
       }
     }
 
-    resolvedMat.current      = m;
-    resolvedSubType.current  = st ?? null;
-    resolvedCount.current    = countEntry;
-    resolvedDoubling.current = doublingRate;
-    resolvedEndUse.current   = q.endUse;
+    resolvedMat.current         = m;
+    resolvedSubType.current     = st ?? null;
+    resolvedCount.current       = countEntry;
+    resolvedDoubling.current    = doublingRate;
+    resolvedEndUse.current      = q.endUse;
+    resolvedTpiOverride.current = resolvedSpindleSpeedOverride.current = resolvedEfficiencyOverride.current = null;
 
     lastContext.current = {
       yarnType: m.name,
       subType:  st && st !== 'Normal' ? st : undefined,
+      count:    (countEntry?.count ?? doublingRate?.count)?.replace(/s$/, ''),
     };
 
     setAwaiting('none');
@@ -297,6 +436,9 @@ export default function ChatScreen() {
     const spindleType  = sub ? SPINDLE_TYPE_BY_LABEL[sub] : undefined;
     const countNum     = ce ? parseInt(ce.count) : NaN;
     const machineParam = spindleType && !isNaN(countNum) ? getMachineParam(countNum) : null;
+    const displayTpi          = resolvedTpiOverride.current          ?? (machineParam && spindleType ? machineParam.tpi[spindleType]          : null);
+    const displaySpindleSpeed = resolvedSpindleSpeedOverride.current ?? (machineParam && spindleType ? machineParam.spindleSpeed[spindleType] : null);
+    const displayEfficiency   = resolvedEfficiencyOverride.current   ?? (machineParam && spindleType ? machineParam.efficiency[spindleType]   : null);
 
     const header = [m.name, sub && sub !== 'Normal' ? sub : null, `(${m.supplier})`].filter(Boolean).join(' • ');
     const lines: (string | null)[] = [
@@ -305,9 +447,9 @@ export default function ChatScreen() {
       '──────────────────────────',
       ce ? `Count:      ${ce.count}` : null,
       machineParam && spindleType ? `TM:            ${machineParam.tm[spindleType].toFixed(2)}` : null,
-      machineParam && spindleType ? `TPI:           ${machineParam.tpi[spindleType].toFixed(2)}` : null,
-      machineParam && spindleType ? `Spindle Speed: ${machineParam.spindleSpeed[spindleType]}` : null,
-      machineParam && spindleType ? `Efficiency:    ${machineParam.efficiency[spindleType]}%` : null,
+      displayTpi          != null ? `TPI:           ${displayTpi.toFixed(2)}${resolvedTpiOverride.current          != null ? ' (custom)' : ''}` : null,
+      displaySpindleSpeed != null ? `Spindle Speed: ${displaySpindleSpeed}${resolvedSpindleSpeedOverride.current    != null ? ' (custom)' : ''}` : null,
+      displayEfficiency   != null ? `Efficiency:    ${displayEfficiency}%${resolvedEfficiencyOverride.current       != null ? ' (custom)' : ''}` : null,
       ce?.gps != null ? `GPS:        ${ce.gps.toFixed(0)}` : null,
       ce ? `Production: ${productionRounded(ce) ?? '—'} kg/day` : null,
       dr ? `Count:         ${dr.count}` : null,
@@ -341,14 +483,28 @@ export default function ChatScreen() {
     }
   }
 
+  // Exact (case-insensitive) match wins outright; otherwise the shortest substring match wins,
+  // so "compact" resolves to "Compact" rather than "N Compact" just because the latter sorts first.
+  function bestTextMatch(candidates: string[], text: string): string | null {
+    const lower = text.toLowerCase().trim();
+    const exact = candidates.find(c => c.toLowerCase() === lower);
+    if (exact) return exact;
+    const contains = candidates.filter(c => c.toLowerCase().includes(lower));
+    contains.sort((a, b) => a.length - b.length);
+    return contains[0] ?? null;
+  }
+
   function handleMaterialChoice(text: string) {
     const choices = pendingChoices.current;
     const idx = parseInt(text.trim()) - 1;
     let chosen: RawMaterial | null = null;
     if (!isNaN(idx) && idx >= 0 && idx < choices.length) chosen = choices[idx];
     else {
-      const lower = text.toLowerCase();
-      chosen = choices.find(m => m.supplier.toLowerCase().includes(lower) || m.name.toLowerCase().includes(lower)) ?? null;
+      chosen =
+        choices.find(m => m.name.toLowerCase() === text.toLowerCase().trim()) ??
+        choices.find(m => m.supplier.toLowerCase() === text.toLowerCase().trim()) ??
+        choices.find(m => m.supplier.toLowerCase().includes(text.toLowerCase()) || m.name.toLowerCase().includes(text.toLowerCase())) ??
+        null;
     }
     if (!chosen) { bot(`Enter a number (1–${choices.length}) or the supplier name.`); return; }
     setAwaiting('none');
@@ -362,11 +518,32 @@ export default function ChatScreen() {
     const idx = parseInt(text.trim()) - 1;
     let chosen: string | null = null;
     if (!isNaN(idx) && idx >= 0 && idx < subTypes.length) chosen = subTypes[idx];
-    else chosen = subTypes.find(s => s.toLowerCase().includes(text.toLowerCase())) ?? null;
+    else chosen = bestTextMatch(subTypes, text);
     if (!chosen) { bot(`Enter a number (1–${subTypes.length}) or the sub-type name.`); return; }
     setAwaiting('none');
     pendingSubTypes.current = [];
     resolve({ ...pendingQuery.current!, subType: chosen });
+  }
+
+  function handleCountChoice(text: string) {
+    const entries = pendingCountEntries.current;
+    const entry   = matchCount(entries, text.trim());
+    if (!entry) {
+      const opts = entries.map(e => e.count.replace(/s$/, '')).join(', ');
+      bot(`Count "${text}" not available.\nAvailable: ${opts}`);
+      return;
+    }
+    if (pendingIsDoubling.current) {
+      resolvedDoubling.current = DOUBLING_RATES.find(r => r.count === entry.count) ?? null;
+    } else {
+      resolvedCount.current = entry;
+    }
+    resolvedTpiOverride.current = resolvedSpindleSpeedOverride.current = resolvedEfficiencyOverride.current = null;
+    pendingCountEntries.current = [];
+    pendingIsDoubling.current   = false;
+    lastContext.current = { ...lastContext.current, count: entry.count.replace(/s$/, '') };
+    setAwaiting('none');
+    showResult();
   }
 
   function handleContribution(text: string) {
@@ -413,13 +590,16 @@ export default function ChatScreen() {
     conversationHistory.current = [];
     lastContext.current = {};
     pendingQuery.current = pendingMat.current = null;
-    pendingChoices.current = pendingSubTypes.current = [];
+    pendingChoices.current = pendingSubTypes.current = pendingCountEntries.current = [];
+    pendingIsDoubling.current = false;
     resolvedMat.current = resolvedSubType.current = resolvedCount.current = resolvedDoubling.current = resolvedEndUse.current = null;
+    resolvedTpiOverride.current = resolvedSpindleSpeedOverride.current = resolvedEfficiencyOverride.current = null;
   }
 
   const hintText = () => {
     if (isTyping) return 'Thinking…';
     if (awaiting === 'contribution')   return 'Enter contribution amount…';
+    if (awaiting === 'count')          return 'Enter a count (e.g. 12)…';
     if (awaiting === 'materialChoice' || awaiting === 'subType') return 'Enter number or name…';
     return 'Ask for yarn price…';
   };
