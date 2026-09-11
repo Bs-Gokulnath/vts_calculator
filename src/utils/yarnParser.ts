@@ -194,8 +194,12 @@ export function parseYarnQuery(input: string): ParsedQuery {
   } else if (/slub/.test(s)) {
     subType = 'Slub';
     yarnType ??= 'Viscose';
-  } else if (/compact|cpt|ring/.test(s)) {
-    subType = 'Normal';
+  } else if (/siro/.test(s)) {
+    subType = 'Siro';
+  } else if (/n[\s-]?compact|normal\s*compact|\bring\b/.test(s)) {
+    subType = 'N Compact';
+  } else if (/compact|cpt/.test(s)) {
+    subType = 'Compact';
   }
 
   // End use

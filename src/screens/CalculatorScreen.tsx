@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Share2, CheckCircle, Calculator, Bookmark, BookmarkCheck, ChevronDown } from 'lucide-react';
+import { Share2, CheckCircle, Calculator, Bookmark, BookmarkCheck, ChevronDown, RotateCcw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { RawMaterial, exMillIncTransport, cleanFibrePrice } from '../data/rawMaterials';
 import {
   YARN_COUNT_GROUPS, STANDALONE_CATEGORIES, DOUBLING_RATES,
   getGroup, getGroupEntries, getStandaloneEntries, matchCount,
   productionRounded, standaloneCategory,
+  SPINDLE_TYPE_BY_LABEL, getMachineParam,
 } from '../data/yarnCount';
 import { formatRupees, shareText } from '../utils/format';
 
@@ -19,6 +20,10 @@ export default function CalculatorScreen() {
   const [exMill, setExMill]           = useState('');
   const [transport, setTransport]     = useState('');
   const [waste, setWaste]             = useState('');
+  const [tm, setTm]                   = useState('');
+  const [tpi, setTpi]                 = useState('');
+  const [spindleSpeed, setSpindleSpeed] = useState('');
+  const [efficiency, setEfficiency]   = useState('');
   const [gps, setGps]                 = useState('');
   const [prod, setProd]               = useState('');
   const [contribution, setContrib]    = useState('');
@@ -41,6 +46,8 @@ export default function CalculatorScreen() {
 
   const showCount = material != null && (group == null || subType !== '') && countEntries.length > 0;
 
+  const spindleType = SPINDLE_TYPE_BY_LABEL[subType];
+
   const cleanFibre = (() => {
     const inc  = parseFloat(exMill) + parseFloat(transport || '0');
     const w    = parseFloat(waste);
@@ -57,15 +64,33 @@ export default function CalculatorScreen() {
 
   const yarnExMill = ratePerKg != null && cleanFibre != null ? ratePerKg + cleanFibre : null;
 
+  function resetMachineParams() {
+    setTm(''); setTpi(''); setSpindleSpeed(''); setEfficiency('');
+  }
+
   function onMaterialChange(id: string) {
     const m = materials.find(x => x.id === id) ?? null;
     setMaterial(m);
     setSubType(''); setCountStr(''); setGps(''); setProd(''); setContrib(''); setPreset('');
+    resetMachineParams();
     if (m) {
       setExMill(m.exMillRate.toFixed(2));
       setTransport(m.transport.toFixed(2));
       setWaste(m.wastePercent.toFixed(1));
     }
+  }
+
+  // Recomputes GPS (and derived Production) from the live TPI / Spindle Speed / Efficiency fields.
+  // GPS = (7.2 × Spindle Speed) ÷ (TPI × Count) × Efficiency%
+  function recomputeGps(tpiStr: string, ssStr: string, effStr: string, countValue: string) {
+    const tpiNum   = parseFloat(tpiStr);
+    const ssNum    = parseFloat(ssStr);
+    const effNum   = parseFloat(effStr);
+    const countNum = parseFloat(countValue);
+    if ([tpiNum, ssNum, effNum, countNum].some(isNaN) || tpiNum <= 0 || countNum <= 0) return;
+    const newGps = (7.2 * ssNum) / (tpiNum * countNum) * (effNum / 100);
+    setGps(newGps.toFixed(2));
+    setProd(Math.round(newGps * 3 / 1000 * 1632).toString());
   }
 
   function onGpsChange(v: string) {
@@ -82,16 +107,33 @@ export default function CalculatorScreen() {
     else setGps('');
   }
 
-  function onCountChange(v: string) {
-    setCountStr(v);
-    if (!v) { setGps(''); setProd(''); return; }
-    if (subType === 'Doubling') return;
+  // Restores GPS/Production and TM/TPI/Spindle Speed/Efficiency to their looked-up defaults for `v`,
+  // discarding any manual edits made to those fields.
+  function applyDefaultsForCount(v: string) {
     const entry = countEntries.find(e => e.count === v);
     if (entry?.gps != null) {
       setGps(entry.gps.toFixed(0));
       const pr = productionRounded(entry);
       setProd(pr != null ? pr.toString() : '');
     } else { setGps(''); setProd(''); }
+
+    const countNum = parseInt(v);
+    const mp = spindleType && !isNaN(countNum) ? getMachineParam(countNum) : null;
+    if (mp && spindleType) {
+      setTm(mp.tm[spindleType].toFixed(2));
+      setTpi(mp.tpi[spindleType].toFixed(2));
+      setSpindleSpeed(mp.spindleSpeed[spindleType].toString());
+      setEfficiency(mp.efficiency[spindleType].toString());
+    } else {
+      resetMachineParams();
+    }
+  }
+
+  function onCountChange(v: string) {
+    setCountStr(v);
+    if (!v) { setGps(''); setProd(''); resetMachineParams(); return; }
+    if (subType === 'Doubling') return;
+    applyDefaultsForCount(v);
   }
 
   function buildCleanFibreQuote(): string {
@@ -266,7 +308,7 @@ export default function CalculatorScreen() {
             <p className="section-label">Sub Type</p>
             <SelectWrapper
               value={subType}
-              onChange={e => { setSubType(e.target.value); setCountStr(''); setGps(''); setProd(''); }}
+              onChange={e => { setSubType(e.target.value); setCountStr(''); setGps(''); setProd(''); resetMachineParams(); }}
             >
               <option value="">Choose a sub type…</option>
               {group.subCategories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -288,7 +330,40 @@ export default function CalculatorScreen() {
         {/* 6. GPS / Production */}
         {countStr && subType !== 'Doubling' && (
           <div className="card p-4 space-y-3">
-            <p className="section-label">Production</p>
+            <div className="flex items-center justify-between">
+              <p className="section-label">Production</p>
+              {tpi !== '' && (
+                <button
+                  onClick={() => applyDefaultsForCount(countStr)}
+                  className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full transition-all active:scale-95"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Reset to default machine parameters"
+                >
+                  <RotateCcw size={11} /> Reset
+                </button>
+              )}
+            </div>
+            {tpi !== '' && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="TM" value={tm} onChange={setTm} />
+                <Field
+                  label="TPI"
+                  value={tpi}
+                  onChange={v => { setTpi(v); recomputeGps(v, spindleSpeed, efficiency, countStr); }}
+                />
+                <Field
+                  label="Spindle Speed"
+                  value={spindleSpeed}
+                  onChange={v => { setSpindleSpeed(v); recomputeGps(tpi, v, efficiency, countStr); }}
+                />
+                <Field
+                  label="Efficiency"
+                  value={efficiency}
+                  onChange={v => { setEfficiency(v); recomputeGps(tpi, spindleSpeed, v, countStr); }}
+                  suffix="%"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="GPS" value={gps} onChange={onGpsChange} />
               <Field label="Production / day / frame (kg)" value={prod} onChange={onProdChange} />

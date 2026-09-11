@@ -10,6 +10,7 @@ import {
   YARN_COUNT_GROUPS, DOUBLING_RATES,
   getGroup, getGroupEntries, getStandaloneEntries, matchCount,
   productionRounded, standaloneCategory,
+  SPINDLE_TYPE_BY_LABEL, getMachineParam,
 } from '../data/yarnCount';
 
 type Awaiting = 'none' | 'materialChoice' | 'subType' | 'contribution';
@@ -247,9 +248,23 @@ export default function ChatScreen() {
     if (q.countStr) {
       if (st === 'Doubling') {
         doublingRate = DOUBLING_RATES.find(r => r.count === q.countStr) ?? null;
+        if (!doublingRate) {
+          setAwaiting('none');
+          bot(`Doubling count "${q.countStr}" not available.\nAvailable: ${DOUBLING_RATES.map(r => r.count).join(', ')}`);
+          return;
+        }
       } else {
         const entries = grp ? getGroupEntries(m.name, st ?? '') : getStandaloneEntries(m.name, m.supplier);
         countEntry    = matchCount(entries, q.countStr);
+        if (!countEntry) {
+          setAwaiting('none');
+          const label     = [m.name, st].filter(Boolean).join(' ');
+          const available = entries.map(e => e.count.replace(/s$/, '')).join(', ');
+          bot(available
+            ? `Count "${q.countStr}" not available for ${label}.\nAvailable counts: ${available}`
+            : `No counts available for ${label}.`);
+          return;
+        }
       }
     }
 
@@ -279,12 +294,20 @@ export default function ChatScreen() {
     const prod       = ce ? productionRounded(ce) : null;
     const contrib    = contribOverride ?? sessionContrib;
 
+    const spindleType  = sub ? SPINDLE_TYPE_BY_LABEL[sub] : undefined;
+    const countNum     = ce ? parseInt(ce.count) : NaN;
+    const machineParam = spindleType && !isNaN(countNum) ? getMachineParam(countNum) : null;
+
     const header = [m.name, sub && sub !== 'Normal' ? sub : null, `(${m.supplier})`].filter(Boolean).join(' • ');
     const lines: (string | null)[] = [
       header,
       eu ? `End use: ${eu.charAt(0).toUpperCase() + eu.slice(1)}` : null,
       '──────────────────────────',
       ce ? `Count:      ${ce.count}` : null,
+      machineParam && spindleType ? `TM:            ${machineParam.tm[spindleType].toFixed(2)}` : null,
+      machineParam && spindleType ? `TPI:           ${machineParam.tpi[spindleType].toFixed(2)}` : null,
+      machineParam && spindleType ? `Spindle Speed: ${machineParam.spindleSpeed[spindleType]}` : null,
+      machineParam && spindleType ? `Efficiency:    ${machineParam.efficiency[spindleType]}%` : null,
       ce?.gps != null ? `GPS:        ${ce.gps.toFixed(0)}` : null,
       ce ? `Production: ${productionRounded(ce) ?? '—'} kg/day` : null,
       dr ? `Count:         ${dr.count}` : null,
@@ -671,7 +694,9 @@ Typo / alias mapping examples (not exhaustive — use judgment for similar cases
 - tensel, tencil, tensal, tensal → Tencel STD
 - reviva, liva revi → Liva Reviva
 - ht → High Twist (sub_type)
-- ring, compact, cpt → Normal (sub_type)
+- ring, n compact, normal compact → N Compact (sub_type)
+- compact, cpt → Compact (sub_type)
+- siro → Siro (sub_type)
 - knitting, hosiery → knitting (end_use)
 - weaving, woven → weaving (end_use)
 
@@ -680,7 +705,7 @@ Conversation memory rules:
 - If only a count is mentioned (e.g. "40s"), keep the previous yarn_type and sub_type.
 - If a new yarn type is explicitly mentioned, reset sub_type unless the user specifies one.
 
-Available sub_type: Normal | High Twist | Slub | High Twist Slub | Micro Viscose | Micro Excel | Doubling
+Available sub_type: N Compact | Compact | Siro | Slub | High Twist | High Twist Slub | Micro Viscose | Micro Excel | Doubling
 
 Return ONLY this JSON, no other text: {"count":null,"yarn_type":null,"sub_type":null,"end_use":null,"is_doubled":false}`;
 
